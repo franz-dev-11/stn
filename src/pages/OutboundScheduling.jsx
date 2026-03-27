@@ -1,0 +1,523 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "../supabaseClient";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import {
+  Edit3,
+  Save,
+  List,
+  Truck,
+  Calendar as CalendarIcon,
+  X,
+  Search,
+  Filter,
+  Clock,
+  CheckCircle2,
+} from "lucide-react";
+
+const OutboundScheduling = () => {
+  const [transactions, setTransactions] = useState([]);
+  const [viewMode, setViewMode] = useState("table");
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All Statuses");
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({ delivery_date: "", status: "" });
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  const fetchTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("sales_transactions")
+        .select(`*, sales_items (*)`)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (err) {
+      console.error("Fetch error:", err.message);
+    }
+  };
+
+  const handleSave = async (id) => {
+    console.log("--- Starting Outbound Save Process ---");
+    try {
+      // 1. Fetch current database state
+      const { data: order, error: fetchErr } = await supabase
+        .from("sales_transactions")
+        .select("*, sales_items(*)")
+        .eq("id", id)
+        .single();
+
+      if (fetchErr) throw new Error("Fetch Order Error: " + fetchErr.message);
+
+      // Check if status is transitioning TO "Completed"
+      const isBecomingCompleted =
+        editData.status === "Completed" && order.status !== "Completed";
+
+      // 2. Update the main sales transaction record
+      const { error: statusUpdateErr } = await supabase
+        .from("sales_transactions")
+        .update({
+          status: editData.status,
+          delivery_date: editData.delivery_date,
+        })
+        .eq("id", id);
+
+      if (statusUpdateErr)
+        throw new Error("Status Update Error: " + statusUpdateErr.message);
+
+      // 3. IF COMPLETED: Process Inventory and Ledger updates
+      if (isBecomingCompleted) {
+        console.log("Status is Completed. Processing Inventory & Ledger...");
+
+        for (const item of order.sales_items) {
+          // A. Fetch current hardware inventory
+          const { data: inv, error: invFetchErr } = await supabase
+            .from("hardware_inventory")
+            .select("stock_balance, outbound_qty, name")
+            .eq("id", item.product_id)
+            .single();
+
+          if (invFetchErr)
+            throw new Error(
+              `Inventory Fetch Error for ${item.item_name}: ` +
+                invFetchErr.message,
+            );
+
+          // B. Update hardware_inventory: Increment outbound_qty and Decrement stock_balance
+          const { error: invUpdateErr } = await supabase
+            .from("hardware_inventory")
+            .update({
+              stock_balance:
+                Number(inv?.stock_balance || 0) - Number(item.quantity),
+              outbound_qty:
+                Number(inv?.outbound_qty || 0) + Number(item.quantity),
+            })
+            .eq("id", item.product_id);
+
+          if (invUpdateErr)
+            throw new Error(
+              `Inventory Update Error for ${item.item_name}: ` +
+                invUpdateErr.message,
+            );
+
+          // C. Insert into Ledger Table (best-effort — table may not exist yet)
+          const { error: ledgerErr } = await supabase.from("ledger").insert([
+            {
+              transaction_type: "OUTBOUND",
+              reference_number: order.so_number,
+              product_id: item.product_id,
+              item_name: item.item_name,
+              quantity: Number(item.quantity),
+              amount: Number(item.quantity) * Number(item.unit_price || 0),
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+
+          if (ledgerErr) {
+            console.warn(
+              `Ledger skipped for ${item.item_name}:`,
+              ledgerErr.message,
+            );
+          }
+        }
+
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
+      }
+
+      setEditingId(null);
+      fetchTransactions();
+    } catch (err) {
+      console.error("CRITICAL ERROR:", err.message);
+      alert("SYSTEM ERROR: " + err.message);
+    }
+  };
+
+  const filteredTransactions = transactions.filter((tx) => {
+    const matchesSearch =
+      tx.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tx.so_number?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus =
+      filterStatus === "All Statuses" || tx.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  const normalizeDate = (value) => {
+    if (!value) return null;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  };
+
+  const isSameDate = (a, b) => {
+    if (!a || !b) return false;
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  };
+
+  const selectedDateTransactions = filteredTransactions.filter((tx) => {
+    const txDate = normalizeDate(tx.delivery_date);
+    return isSameDate(txDate, selectedDate);
+  });
+
+  const calendarEvents = useMemo(() => {
+    return filteredTransactions
+      .filter((tx) => tx.delivery_date)
+      .map((tx) => ({
+        id: String(tx.id),
+        title: `${tx.so_number} • ${tx.customer_name}`,
+        start: tx.delivery_date,
+        allDay: true,
+        extendedProps: {
+          status: tx.status,
+          lineItems: tx.sales_items?.length || 0,
+        },
+      }));
+  }, [filteredTransactions]);
+
+  return (
+    <div className='p-8 bg-[#f3f4f6] min-h-screen relative font-sans text-black'>
+      {showSuccess && (
+        <div className='fixed top-10 left-1/2 -translate-x-1/2 z-[100] bg-black text-white px-8 py-4 rounded-xl font-black shadow-lg flex items-center gap-2 animate-bounce'>
+          <CheckCircle2 className='text-emerald-400' /> INVENTORY & BATCHES
+          UPDATED
+        </div>
+      )}
+
+      <style>{`
+        .outbound-calendar .fc {
+          font-family: inherit;
+        }
+
+        .outbound-calendar .fc .fc-toolbar-title {
+          font-size: 0.95rem;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #0f172a;
+        }
+
+        .outbound-calendar .fc .fc-button {
+          background: #0f172a;
+          border: none;
+          border-radius: 0.75rem;
+          text-transform: uppercase;
+          font-size: 0.65rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          padding: 0.35rem 0.7rem;
+          cursor: pointer;
+          touch-action: manipulation;
+        }
+
+        .outbound-calendar .fc .fc-button:hover {
+          background: #1e293b;
+        }
+
+        .outbound-calendar .fc .fc-button:active {
+          transform: scale(0.98);
+        }
+
+        .outbound-calendar .fc .fc-daygrid-day.fc-day-today {
+          background: #eff6ff;
+        }
+
+        .outbound-calendar .fc .fc-daygrid-event {
+          border: none;
+          border-radius: 0.5rem;
+          background: #3b82f6;
+          padding: 0.1rem 0.35rem;
+          font-size: 0.62rem;
+          font-weight: 800;
+          letter-spacing: 0.03em;
+          cursor: pointer;
+          touch-action: manipulation;
+        }
+
+        @media (max-width: 768px) {
+          .outbound-calendar .fc .fc-toolbar-title {
+            font-size: 0.75rem;
+            margin: 0.5rem 0;
+          }
+          .outbound-calendar .fc .fc-button {
+            font-size: 0.55rem;
+            padding: 0.25rem 0.5rem;
+          }
+          .outbound-calendar .fc .fc-daygrid-event {
+            font-size: 0.5rem;
+            padding: 0.05rem 0.25rem;
+          }
+          .outbound-calendar .fc .fc-col-header-cell {
+            padding: 0.25rem 0 !important;
+            font-size: 0.7rem;
+          }
+          .outbound-calendar .fc .fc-daygrid-day-number {
+            padding: 0.25rem 0.5rem !important;
+            font-size: 0.7rem;
+          }
+          .outbound-calendar .fc .fc-daygrid-day {
+            height: 60px;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .outbound-calendar .fc .fc-toolbar-title {
+            font-size: 0.65rem;
+            margin: 0.25rem 0;
+          }
+          .outbound-calendar .fc .fc-button {
+            font-size: 0.5rem;
+            padding: 0.2rem 0.4rem;
+          }
+          .outbound-calendar .fc .fc-daygrid-event {
+            font-size: 0.45rem;
+            padding: 0 0.2rem;
+          }
+          .outbound-calendar .fc .fc-col-header-cell {
+            padding: 0.15rem 0 !important;
+            font-size: 0.6rem;
+          }
+          .outbound-calendar .fc .fc-daygrid-day-number {
+            padding: 0.15rem 0.3rem !important;
+            font-size: 0.6rem;
+          }
+          .outbound-calendar .fc .fc-daygrid-day {
+            height: 50px;
+          }
+        }
+      `}</style>
+
+      {/* Header */}
+      <div className='flex justify-between items-center mb-8'>
+        <div>
+          <h1 className='text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
+            <Truck className='text-teal-600' size={32} /> OUTBOUND DELIVERY
+          </h1>
+          <p className='text-slate-600 font-bold text-xs uppercase tracking-[0.2em] mt-2'>
+            Dispatch Queue | Delivery Scheduling
+          </p>
+        </div>
+        <div className='flex bg-white rounded-xl p-1 shadow-sm'>
+          <button
+            onClick={() => setViewMode("table")}
+            className={`px-6 py-2 rounded-lg flex items-center gap-2 text-xs font-black uppercase transition-all ${
+              viewMode === "table"
+                ? "bg-black text-white"
+                : "text-black hover:bg-slate-100"
+            }`}
+          >
+            <List size={16} /> Table
+          </button>
+          <button
+            onClick={() => setViewMode("calendar")}
+            className={`px-6 py-2 rounded-lg flex items-center gap-2 text-xs font-black uppercase transition-all ${
+              viewMode === "calendar"
+                ? "bg-black text-white"
+                : "text-black hover:bg-slate-100"
+            }`}
+          >
+            <CalendarIcon size={16} /> Calendar
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className='grid grid-cols-1 md:grid-cols-3 gap-6 mb-8'>
+        <div className='md:col-span-2 relative'>
+          <Search
+            className='absolute left-4 top-1/2 -translate-y-1/2 text-black'
+            size={20}
+          />
+          <input
+            type='text'
+            placeholder='Search Order # or Customer...'
+            className='w-full pl-12 pr-4 py-4 rounded-2xl font-black uppercase text-xs outline-none focus:bg-yellow-50 transition-all shadow-sm'
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className='relative'>
+          <Filter
+            className='absolute left-4 top-1/2 -translate-y-1/2 text-black'
+            size={20}
+          />
+          <select
+            className='w-full pl-12 pr-4 py-4 rounded-2xl font-black uppercase text-xs outline-none appearance-none bg-white cursor-pointer shadow-sm'
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option>All Statuses</option>
+            <option>Pending</option>
+            <option>In Transit</option>
+            <option>Completed</option>
+          </select>
+        </div>
+      </div>
+
+      {viewMode === "table" ? (
+        <div className='bg-white rounded-2xl shadow-sm overflow-hidden'>
+          <table className='w-full text-left'>
+            <thead>
+              <tr className='bg-black text-white text-[10px] font-black uppercase'>
+                <th className='px-6 py-4'>Customer & Items</th>
+                <th className='px-6 py-4'>Delivery Date</th>
+                <th className='px-6 py-4'>Status</th>
+                <th className='px-6 py-4 text-right'>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransactions.length > 0 ? (
+                filteredTransactions.map((tx) => (
+                  <tr
+                    key={tx.id}
+                    className='hover:bg-yellow-50 transition-colors'
+                  >
+                    <td className='p-6'>
+                      <p className='font-mono text-teal-700 font-black text-sm mb-1'>
+                        #{tx.so_number}
+                      </p>
+                      <p className='font-black uppercase text-lg leading-none mb-2'>
+                        {tx.customer_name}
+                      </p>
+                      <div className='flex flex-wrap gap-2 mt-2'>
+                        {tx.sales_items?.map((item, idx) => (
+                          <span
+                            key={idx}
+                            className='text-[10px] bg-white px-2 py-1 rounded font-black text-black uppercase'
+                          >
+                            {item.item_name} (x{item.quantity})
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className='p-6'>
+                      {editingId === tx.id ? (
+                        <input
+                          type='date'
+                          className='rounded-lg p-2 text-sm font-black uppercase w-full'
+                          value={editData.delivery_date}
+                          onChange={(e) =>
+                            setEditData({
+                              ...editData,
+                              delivery_date: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className='flex items-center gap-2 text-sm font-black text-slate-700 uppercase'>
+                          <Clock size={18} strokeWidth={2.5} />{" "}
+                          {tx.delivery_date || "NOT SCHEDULED"}
+                        </div>
+                      )}
+                    </td>
+                    <td className='p-6'>
+                      {editingId === tx.id ? (
+                        <select
+                          className='rounded-lg p-2 text-sm font-black uppercase w-full'
+                          value={editData.status}
+                          onChange={(e) =>
+                            setEditData({ ...editData, status: e.target.value })
+                          }
+                        >
+                          <option value='Pending'>Pending</option>
+                          <option value='In Transit'>In Transit</option>
+                          <option value='Completed'>Completed</option>
+                        </select>
+                      ) : (
+                        <span
+                          className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase ${
+                            tx.status === "Completed"
+                              ? "bg-emerald-400 text-black"
+                              : tx.status === "In Transit"
+                                ? "bg-teal-400 text-black"
+                                : "bg-white text-black"
+                          }`}
+                        >
+                          {tx.status}
+                        </span>
+                      )}
+                    </td>
+                    <td className='p-6 text-right'>
+                      {editingId === tx.id ? (
+                        <div className='flex justify-end gap-3'>
+                          <button
+                            onClick={() => handleSave(tx.id)}
+                            className='bg-emerald-400 p-2 rounded-lg hover:translate-x-[2px] hover:translate-y-[2px] transition-all'
+                          >
+                            <Save size={24} />
+                          </button>
+                          <button
+                            onClick={() => setEditingId(null)}
+                            className='bg-red-400 p-2 rounded-lg'
+                          >
+                            <X size={24} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingId(tx.id);
+                            setEditData({
+                              delivery_date: tx.delivery_date || "",
+                              status: tx.status,
+                            });
+                          }}
+                          className='p-3 hover:bg-slate-100 rounded-xl transition-all'
+                        >
+                          <Edit3 size={24} strokeWidth={2.5} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan='4'
+                    className='p-10 text-center text-xs font-black uppercase text-slate-500'
+                  >
+                    No outbound transactions found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className='bg-white rounded-2xl p-4 shadow-sm outbound-calendar'>
+          <FullCalendar
+            plugins={[dayGridPlugin, interactionPlugin]}
+            initialView='dayGridMonth'
+            headerToolbar={{
+              left: "prev,next",
+              center: "title",
+              right: "",
+            }}
+            height='auto'
+            events={calendarEvents}
+            dateClick={(info) => setSelectedDate(info.date)}
+            eventClick={(info) => {
+              if (info.event.start) {
+                setSelectedDate(info.event.start);
+              }
+            }}
+            eventDisplay='block'
+            dayMaxEvents={3}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default OutboundScheduling;

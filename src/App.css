@@ -1,0 +1,10 @@
+/* App-specific styles */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Ensure sidebar and main content layout work properly */
+.flex {
+  display: flex;
+}
