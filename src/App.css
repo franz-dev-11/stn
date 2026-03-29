@@ -8,3 +8,69 @@
 .flex {
   display: flex;
 }
+
+/* Responsive tables */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+  min-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .table-responsive {
+    font-size: 0.875rem;
+  }
+
+  .table-responsive th,
+  .table-responsive td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .table-responsive th {
+    font-size: 0.75rem;
+  }
+}
+
+/* Responsive grid */
+@media (max-width: 1024px) {
+  .grid-responsive {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .grid-responsive {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Responsive padding */
+@media (max-width: 768px) {
+  .page-padding {
+    padding: 1rem;
+  }
+
+  .p-8 {
+    padding: 1rem;
+  }
+
+  .p-6 {
+    padding: 1rem;
+  }
+}
+
+/* Hide elements on mobile if needed */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-mobile {
+    display: none;
+  }
+}

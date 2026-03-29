@@ -213,33 +213,33 @@ const RecordSales = () => {
     return <InvoiceView order={lastOrder} onBack={() => setView("browse")} />;
 
   return (
-    <div className='p-8 bg-slate-50 min-h-screen font-sans text-slate-900'>
-      <div className='flex justify-between items-center mb-10'>
+    <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans text-slate-900 overflow-x-hidden'>
+      <div className='flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 sm:mb-10 gap-4'>
         <div>
-          <h1 className='text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
+          <h1 className='text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
             <Calculator className='text-teal-600' size={32} /> POINT OF SALES
           </h1>
-          <p className='text-slate-600 font-bold text-xs uppercase tracking-[0.2em] mt-2'>
+          <p className='text-slate-600 font-bold text-[8px] sm:text-xs uppercase tracking-[0.2em] mt-2'>
             Sales Capture | Inventory Terminal
           </p>
         </div>
         <button
           onClick={() => setIsCartOpen(true)}
-          className='bg-white p-5 rounded-2xl shadow-sm transition-all relative'
+          className='bg-white p-4 sm:p-5 rounded-2xl shadow-sm transition-all relative self-start sm:self-center'
         >
           <ShoppingCart />
           {cart.length > 0 && (
-            <span className='absolute -top-2 -right-2 bg-teal-600 text-white text-[10px] font-black w-7 h-7 flex items-center justify-center rounded-full border-4 border-slate-50'>
+            <span className='absolute -top-2 -right-2 bg-teal-600 text-white text-[8px] sm:text-[10px] font-black w-6 sm:w-7 h-6 sm:h-7 flex items-center justify-center rounded-full border-4 border-slate-50'>
               {cart.length}
             </span>
           )}
         </button>
       </div>
 
-      <div className='grid grid-cols-1 lg:grid-cols-4 gap-8'>
+      <div className='grid grid-cols-1 lg:grid-cols-4 gap-6 sm:gap-8'>
         <div className='lg:col-span-3'>
-          <div className='bg-white p-2 rounded-2xl mb-8 flex gap-4 shadow-sm transition-all'>
-            <div className='p-4'>
+          <div className='bg-white p-2 rounded-2xl mb-6 sm:mb-8 flex gap-4 shadow-sm transition-all'>
+            <div className='p-3 sm:p-4'>
               <Search className='text-slate-400' size={20} />
             </div>
             <input
@@ -251,7 +251,7 @@ const RecordSales = () => {
             />
           </div>
 
-          <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'>
+          <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6'>
             {filteredItems.length > 0 ? (
               filteredItems.map((item) => {
                 const isOutOfStock = item.batches.length === 0;

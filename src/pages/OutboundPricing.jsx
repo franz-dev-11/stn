@@ -11,7 +11,7 @@ import {
 
 const OutboundPricing = () => {
   return (
-    <div className='p-8 bg-[#e5e7eb] min-h-screen font-sans text-slate-800'>
+    <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-[#e5e7eb] min-h-screen font-sans text-slate-800 overflow-x-hidden'>
       {/* Page Title Section */}
       <div className='mb-6 flex justify-between items-end'>
         <div>

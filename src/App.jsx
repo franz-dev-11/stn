@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useState, useEffect } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { supabase } from "./supabaseClient";
 import { initializeAvatarStorage } from "./utils/avatarStorage";
+import { Menu, X } from "lucide-react";
 
 // Components & Pages
 import Sidebar from "./components/Sidebar";
@@ -23,13 +24,30 @@ const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 
 const AppLayout = ({ session }) => {
   const [currentPage, setCurrentPage] = useState("Dashboard");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (!session) return <Navigate to='/login' replace />;
 
   return (
-    <div className='flex'>
-      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
-      <div className='flex-1 overflow-x-hidden'>
+    <div className='flex h-screen w-full overflow-hidden'>
+      <button
+        className='fixed top-6 right-6 z-[60] md:hidden flex items-center justify-center p-2 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-all duration-300'
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        aria-label='Toggle menu'
+      >
+        {isMobileMenuOpen ? (
+          <X size={20} className='transition-transform duration-300' />
+        ) : (
+          <Menu size={20} className='transition-transform duration-300' />
+        )}
+      </button>
+      <Sidebar
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        isMobileMenuOpen={isMobileMenuOpen}
+        setIsMobileMenuOpen={setIsMobileMenuOpen}
+      />
+      <div className='flex-1 flex flex-col overflow-y-auto overflow-x-hidden'>
         <Outlet />
       </div>
     </div>

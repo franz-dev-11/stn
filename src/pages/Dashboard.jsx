@@ -820,7 +820,7 @@ const Dashboard = () => {
   }, [filteredInventoryItems, reorderSignals, salesItems, selectedForecastSkuId]);
 
   return (
-    <main className='flex-1 p-8 bg-slate-50 min-h-screen font-sans'>
+    <main className='flex-1 p-3 sm:p-4 md:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans overflow-x-hidden'>
       <header className='mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
         <div>
           <h1 className='text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
@@ -1297,7 +1297,8 @@ const Dashboard = () => {
                 ))}
               </div>
             </div>
-            <table className='w-full text-left'>
+            <div className='overflow-x-auto'>
+            <table className='w-full text-left min-w-max'>
               <thead>
                 <tr className='bg-black text-white text-[10px] font-black uppercase'>
                   <th className='px-6 py-4'>Product</th>
@@ -1346,6 +1347,7 @@ const Dashboard = () => {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 
@@ -1353,7 +1355,8 @@ const Dashboard = () => {
           <div className='p-6 bg-rose-50 font-black text-rose-800 uppercase text-xs flex items-center gap-2'>
             <Flame size={16} className='text-rose-600' /> Stockout Monitor
           </div>
-          <table className='w-full text-left'>
+          <div className='overflow-x-auto'>
+          <table className='w-full text-left min-w-max'>
             <thead>
               <tr className='bg-black text-white text-[10px] font-black uppercase'>
                 <th className='px-4 py-4'>Item</th>
@@ -1390,6 +1393,7 @@ const Dashboard = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 

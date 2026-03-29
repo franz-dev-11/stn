@@ -167,7 +167,7 @@ const InboundScheduling = () => {
   }, [filteredOrders]);
 
   return (
-    <div className='p-8 bg-[#f3f4f6] min-h-screen relative font-sans text-black'>
+    <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-[#f3f4f6] min-h-screen relative font-sans text-black overflow-x-hidden'>
       {showSuccess && (
         <div className='fixed top-10 left-1/2 -translate-x-1/2 z-[100] bg-black text-white px-8 py-4 rounded-xl font-black shadow-lg flex items-center gap-2 animate-bounce'>
           <CheckCircle2 className='text-emerald-400' /> INVENTORY & BATCHES

@@ -127,31 +127,31 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
   };
 
   return (
-    <div className='p-8 w-full bg-slate-50 min-h-screen font-sans text-slate-900'>
+    <div className='p-3 sm:p-4 md:p-6 lg:p-8 w-full bg-slate-50 min-h-screen font-sans text-slate-900 overflow-x-hidden'>
       {/* HEADER SECTION */}
-      <div className='flex justify-between items-end mb-10 no-print'>
+      <div className='flex flex-col sm:flex-row sm:justify-between sm:items-end mb-8 sm:mb-10 gap-4 no-print'>
         <div>
-          <h1 className='text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
+          <h1 className='text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
             <Database className='text-teal-600' size={32} /> INVENTORY
             MANAGEMENT
           </h1>
-          <p className='text-slate-600 font-bold text-xs uppercase tracking-[0.2em] mt-2'>
+          <p className='text-slate-600 font-bold text-[8px] sm:text-xs uppercase tracking-[0.2em] mt-2'>
             Verified System Master | Hardware Logistics
           </p>
         </div>
-        <div className='flex items-center gap-8'>
-          <div className='text-right pr-8'>
-            <span className='text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1'>
+        <div className='flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8'>
+          <div className='text-right'>
+            <span className='text-[8px] sm:text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1'>
               Station Time
             </span>
-            <div className='flex items-center gap-2 text-slate-900 font-mono font-bold text-2xl'>
-              <Clock size={22} className='text-teal-600' /> {currentTime}
+            <div className='flex items-center gap-2 text-slate-900 font-mono font-bold text-lg sm:text-2xl'>
+              <Clock size={16} className='text-teal-600' /> {currentTime}
             </div>
           </div>
           <button
             onClick={handleEndDay}
             disabled={isProcessing}
-            className='bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase hover:bg-black transition-all shadow-xl active:scale-95 flex items-center gap-2'
+            className='bg-slate-900 text-white px-4 sm:px-8 py-3 sm:py-4 rounded-2xl text-[8px] sm:text-xs font-black uppercase hover:bg-black transition-all shadow-xl active:scale-95 flex items-center gap-2 whitespace-nowrap'
           >
             {isProcessing ? "Processing..." : "End Business Day"}
           </button>
@@ -159,13 +159,14 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
       </div>
 
       {/* 1. DAILY MOVEMENT LEDGER */}
-      <div className='mb-14'>
-        <h2 className='text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
+      <div className='mb-8 sm:mb-14'>
+        <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
           <ArrowDownUp className='text-teal-600' size={24} /> Daily Movement
           Ledger
         </h2>
         <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
-          <table className='w-full text-left'>
+          <div className='overflow-x-auto'>
+          <table className='w-full text-left min-w-max'>
             <thead>
               <tr className='bg-black text-white text-[10px] font-black uppercase'>
                 <th className='px-8 py-6'>Item Details</th>
@@ -238,16 +239,18 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
       {/* 2. MASTER RECORDS (BATCHES) */}
-      <div className='mb-14'>
-        <h2 className='text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
+      <div className='mb-8 sm:mb-14'>
+        <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
           <Package className='text-teal-600' size={24} /> Master Batch Records
         </h2>
         <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
-          <table className='w-full text-left'>
+          <div className='overflow-x-auto'>
+          <table className='w-full text-left min-w-max'>
             <thead>
               <tr className='bg-black text-white text-[10px] font-black uppercase'>
                 <th className='px-8 py-6 w-20 text-center'>Status</th>
@@ -355,17 +358,19 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
       {/* 3. LEDGER HISTORY (ARCHIVE) */}
       <div className='no-print'>
-        <h2 className='text-xl font-black text-slate-900 uppercase tracking-tight mb-5 flex items-center gap-2'>
+        <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight mb-5 flex items-center gap-2'>
           <Clock size={24} className='text-slate-400' /> Ledger History (EOD
           Snapshots)
         </h2>
         <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
-          <table className='w-full text-left'>
+          <div className='overflow-x-auto'>
+          <table className='w-full text-left min-w-max'>
             <thead>
               <tr className='bg-black text-white text-[10px] uppercase font-black'>
                 <th className='px-8 py-6 tracking-widest'>Snapshot Date</th>
@@ -426,6 +431,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>

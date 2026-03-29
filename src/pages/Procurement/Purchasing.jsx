@@ -38,41 +38,41 @@ const Purchasing = () => {
   }, [data.cart]);
 
   return (
-    <div className='p-8 bg-[#f3f4f6] min-h-screen text-black font-sans'>
+    <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-[#f3f4f6] min-h-screen text-black font-sans overflow-x-hidden'>
       {/* 1. HEADER & TOP NAVIGATION (Hidden on Checkout) */}
       {data.view !== "checkout" && (
         <>
-          <div className='flex justify-between items-center mb-8'>
+          <div className='flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8'>
             <div>
-              <h1 className='text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
+              <h1 className='text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
                 <ShoppingCart className='text-teal-600' size={32} />
                 PROCUREMENT
               </h1>
-              <p className='text-slate-600 font-bold text-xs uppercase tracking-[0.2em] mt-2'>
+              <p className='text-slate-600 font-bold text-[8px] sm:text-xs uppercase tracking-[0.2em] mt-2'>
                 Supplier Catalog | Purchasing Terminal
               </p>
             </div>
             <button
               onClick={() => data.setIsCartOpen(true)}
-              className='bg-white p-5 rounded-2xl shadow-sm hover:shadow-lg transition-all relative'
+              className='bg-white p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-lg transition-all relative self-start sm:self-center'
             >
               <ShoppingCart />
               {data.cart.length > 0 && (
-                <span className='absolute -top-2 -right-2 bg-teal-600 text-white text-[10px] font-black w-7 h-7 flex items-center justify-center rounded-full'>
+                <span className='absolute -top-2 -right-2 bg-teal-600 text-white text-[8px] sm:text-[10px] font-black w-6 sm:w-7 h-6 sm:h-7 flex items-center justify-center rounded-full'>
                   {data.cart.length}
                 </span>
               )}
             </button>
           </div>
 
-          <div className='space-y-6 mb-8 no-print'>
+          <div className='space-y-4 sm:space-y-6 mb-6 sm:mb-8 no-print'>
             {/* TAB NAVIGATION */}
-            <div className='flex bg-white p-1 rounded-2xl w-fit shadow-sm'>
+            <div className='flex bg-white p-1 rounded-2xl w-fit shadow-sm overflow-x-auto'>
               {["browse", "addItem", "addSupplier"].map((v) => (
                 <button
                   key={v}
                   onClick={() => data.setView(v)}
-                  className={`px-6 py-2 rounded-xl font-black uppercase text-[10px] transition-all ${
+                  className={`px-4 sm:px-6 py-2 rounded-xl font-black uppercase text-[8px] sm:text-[10px] transition-all whitespace-nowrap ${
                     data.view === v
                       ? "bg-black text-white"
                       : "text-black hover:bg-slate-100"
@@ -89,9 +89,9 @@ const Purchasing = () => {
 
             {/* SUPPLIER FILTER BAR - Only visible in Browse Mode */}
             {data.view === "browse" && (
-              <div className='flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm'>
-                <Filter size={18} className='text-black' />
-                <span className='text-xs font-black uppercase text-slate-600'>
+              <div className='flex items-center gap-3 sm:gap-4 bg-white p-3 sm:p-4 rounded-2xl shadow-sm overflow-x-auto'>
+                <Filter size={18} className='text-black flex-shrink-0' />
+                <span className='text-[8px] sm:text-xs font-black uppercase text-slate-600 flex-shrink-0'>
                   Filter Supplier:
                 </span>
                 <div className='flex gap-2 overflow-x-auto pb-1'>

@@ -94,7 +94,7 @@ const PurchaseHistory = () => {
   };
 
   return (
-    <div className='p-8 bg-[#f3f4f6] min-h-screen text-black print:bg-white print:p-0'>
+    <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-[#f3f4f6] min-h-screen text-black print:bg-white print:p-0 overflow-x-hidden'>
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
@@ -105,13 +105,13 @@ const PurchaseHistory = () => {
       `}</style>
 
       <div className='max-w-5xl mx-auto'>
-        <div className='flex justify-between items-end mb-8 no-print'>
+        <div className='flex flex-col sm:flex-row sm:justify-between sm:items-end mb-6 sm:mb-8 gap-4 no-print'>
           <div>
-            <h1 className='text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
+            <h1 className='text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
               <History size={32} className='text-teal-600' /> PROCUREMENT
               HISTORY
             </h1>
-            <p className='text-slate-600 font-bold text-xs uppercase tracking-[0.2em] mt-2'>
+            <p className='text-slate-600 font-bold text-[8px] sm:text-xs uppercase tracking-[0.2em] mt-2'>
               Inbound Record Archive | Vendor Timeline
             </p>
           </div>
@@ -121,8 +121,8 @@ const PurchaseHistory = () => {
         </div>
 
         {/* Filters */}
-        <div className='bg-white p-6 rounded-2xl mb-8 shadow-sm no-print'>
-          <div className='grid grid-cols-1 md:grid-cols-12 gap-6'>
+        <div className='bg-white p-4 sm:p-6 rounded-2xl mb-8 shadow-sm no-print'>
+          <div className='grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6'>
             <div className='md:col-span-5'>
               <label className='block text-[10px] font-black uppercase text-slate-600 mb-2'>
                 Search Records
@@ -180,228 +180,235 @@ const PurchaseHistory = () => {
 
         {/* List */}
         <div className='bg-white rounded-2xl overflow-hidden shadow-sm'>
-          <table className='w-full text-left'>
-            <thead>
-              <tr className='bg-black text-white text-[10px] font-black uppercase'>
-                <th className='px-6 py-4'>Date</th>
-                <th className='px-6 py-4'>Batch #</th>
-                <th className='px-6 py-4'>Vendor</th>
-                <th className='px-6 py-4'>Item</th>
-                <th className='px-6 py-4'>SKU</th>
-                <th className='px-6 py-4 text-center'>Qty</th>
-                <th className='px-6 py-4 text-right'>Unit Cost</th>
-                <th className='px-6 py-4 text-right'>Total Value</th>
-                <th className='px-6 py-4 text-right'>Actions</th>
-              </tr>
-            </thead>
-            <tbody className='divide-y divide-slate-100'>
-              {currentItems.length > 0 ? (
-                currentItems.map((batch) => {
-                  const vendor = suppliers.find(
-                    (s) => s.name === batch.hardware_inventory?.supplier,
-                  );
-                  const isExpanded = expandedBatch === batch.id;
-                  return (
-                    <React.Fragment key={batch.id}>
-                      <tr
-                        onClick={() =>
-                          setExpandedBatch(isExpanded ? null : batch.id)
-                        }
-                        className='hover:bg-slate-50 cursor-pointer transition-colors'
-                      >
-                        <td className='px-6 py-4 text-[10px] font-bold text-slate-500 whitespace-nowrap'>
-                          {new Date(batch.batch_date).toLocaleDateString()}
-                        </td>
-                        <td className='px-6 py-4'>
-                          <span className='font-mono font-black text-teal-700 text-sm'>
-                            {batch.batch_number}
-                          </span>
-                        </td>
-                        <td className='px-6 py-4 font-black uppercase text-xs'>
-                          {batch.hardware_inventory?.supplier || "N/A"}
-                        </td>
-                        <td className='px-6 py-4 font-black uppercase text-xs max-w-[160px] truncate'>
-                          {batch.hardware_inventory?.name}
-                        </td>
-                        <td className='px-6 py-4 font-mono text-[10px] text-slate-500'>
-                          {batch.hardware_inventory?.sku}
-                        </td>
-                        <td className='px-6 py-4 text-center font-black'>
-                          {batch.current_stock}{" "}
-                          <span className='text-[10px] font-bold text-slate-400'>
-                            {batch.hardware_inventory?.unit}
-                          </span>
-                        </td>
-                        <td className='px-6 py-4 text-right font-bold text-sm'>
-                          ₱{batch.unit_cost?.toLocaleString()}
-                        </td>
-                        <td className='px-6 py-4 text-right font-black text-sm'>
-                          ₱
-                          {(
-                            batch.unit_cost * batch.current_stock
-                          ).toLocaleString()}
-                        </td>
-                        <td className='px-6 py-4 text-right'>
-                          <div className='flex justify-end'>
-                            {isExpanded ? (
-                              <ChevronUp size={16} />
-                            ) : (
-                              <ChevronDown size={16} />
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan='9' className='p-0 bg-slate-50'>
-                            <div className='print-area'>
-                              {/* Toolbar */}
-                              <div className='bg-black text-white px-8 py-4 flex justify-between items-center no-print'>
-                                <h2 className='font-black uppercase tracking-widest text-sm flex items-center gap-2'>
-                                  <Tag size={16} />{" "}
-                                  {batch.hardware_inventory?.supplier}
-                                </h2>
-                                <div className='flex gap-2'>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      window.print();
-                                    }}
-                                    className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'
-                                  >
-                                    <Printer size={14} /> Print Record
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleGmailSend(batch);
-                                    }}
-                                    className='bg-[#ea4335] px-4 py-2 rounded-lg text-[10px] font-black text-white flex items-center gap-2 hover:bg-[#d33c27] transition-all'
-                                  >
-                                    <Mail size={14} /> Email Vendor
-                                  </button>
-                                </div>
-                              </div>
-                              {/* Record Content */}
-                              <div className='p-8 bg-white'>
-                                <div className='flex justify-between items-start pb-4 mb-6 border-b-2 border-slate-200'>
-                                  <div>
-                                    <h1 className='text-4xl font-black uppercase italic leading-none'>
-                                      Inbound Record
-                                    </h1>
-                                    <p className='text-xs font-bold text-slate-600 mt-2'>
-                                      Ref Batch: {batch.batch_number}
-                                    </p>
-                                  </div>
-                                  <div className='text-right'>
-                                    <p className='text-sm font-black uppercase'>
-                                      Date:{" "}
-                                      {new Date(
-                                        batch.batch_date,
-                                      ).toLocaleDateString()}
-                                    </p>
-                                    <p className='text-[10px] font-bold text-slate-600 uppercase'>
-                                      Inventory History
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className='grid grid-cols-2 gap-8 mb-8'>
-                                  <div>
-                                    <h4 className='text-[10px] font-black text-slate-600 uppercase mb-1'>
-                                      Source Vendor:
-                                    </h4>
-                                    <p className='text-sm font-black uppercase'>
-                                      {batch.hardware_inventory?.supplier}
-                                    </p>
-                                    <p className='text-xs font-medium text-slate-600'>
-                                      {vendor?.address || "Address not listed"}
-                                    </p>
-                                    <p className='text-xs font-medium text-slate-600'>
-                                      {vendor?.email || "Email not listed"}
-                                    </p>
-                                  </div>
-                                </div>
-                                <table className='w-full text-left mb-6'>
-                                  <thead>
-                                    <tr className='bg-black text-white text-[10px] uppercase font-black'>
-                                      <th className='py-3'>SKU</th>
-                                      <th className='py-3'>Description</th>
-                                      <th className='py-3 text-center'>
-                                        Qty Received
-                                      </th>
-                                      <th className='py-3 text-center'>Unit</th>
-                                      <th className='py-3 text-right'>
-                                        Unit Cost
-                                      </th>
-                                      <th className='py-3 text-right'>
-                                        Total Value
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    <tr className='border-b border-slate-100'>
-                                      <td className='py-4 text-[10px] font-mono font-bold text-slate-600'>
-                                        #{batch.hardware_inventory?.sku}
-                                      </td>
-                                      <td className='py-4 text-sm font-black uppercase'>
-                                        {batch.hardware_inventory?.name}
-                                      </td>
-                                      <td className='py-4 text-center font-black'>
-                                        {batch.current_stock}
-                                      </td>
-                                      <td className='py-4 text-center text-xs font-bold text-slate-600 uppercase'>
-                                        {batch.hardware_inventory?.unit}
-                                      </td>
-                                      <td className='py-4 text-right text-sm font-bold'>
-                                        ₱{batch.unit_cost?.toLocaleString()}
-                                      </td>
-                                      <td className='py-4 text-right text-sm font-black'>
-                                        ₱
-                                        {(
-                                          batch.unit_cost * batch.current_stock
-                                        ).toLocaleString()}
-                                      </td>
-                                    </tr>
-                                  </tbody>
-                                  <tfoot>
-                                    <tr className='border-t-2 border-slate-200'>
-                                      <td
-                                        colSpan='5'
-                                        className='py-6 text-right text-sm font-black uppercase text-slate-600'
-                                      >
-                                        Recorded Inventory Value:
-                                      </td>
-                                      <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>
-                                        ₱
-                                        {(
-                                          batch.unit_cost * batch.current_stock
-                                        ).toLocaleString()}
-                                      </td>
-                                    </tr>
-                                  </tfoot>
-                                </table>
-                              </div>
+          <div className='overflow-x-auto'>
+            <table className='w-full text-left min-w-max'>
+              <thead>
+                <tr className='bg-black text-white text-[10px] font-black uppercase'>
+                  <th className='px-6 py-4'>Date</th>
+                  <th className='px-6 py-4'>Batch #</th>
+                  <th className='px-6 py-4'>Vendor</th>
+                  <th className='px-6 py-4'>Item</th>
+                  <th className='px-6 py-4'>SKU</th>
+                  <th className='px-6 py-4 text-center'>Qty</th>
+                  <th className='px-6 py-4 text-right'>Unit Cost</th>
+                  <th className='px-6 py-4 text-right'>Total Value</th>
+                  <th className='px-6 py-4 text-right'>Actions</th>
+                </tr>
+              </thead>
+              <tbody className='divide-y divide-slate-100'>
+                {currentItems.length > 0 ? (
+                  currentItems.map((batch) => {
+                    const vendor = suppliers.find(
+                      (s) => s.name === batch.hardware_inventory?.supplier,
+                    );
+                    const isExpanded = expandedBatch === batch.id;
+                    return (
+                      <React.Fragment key={batch.id}>
+                        <tr
+                          onClick={() =>
+                            setExpandedBatch(isExpanded ? null : batch.id)
+                          }
+                          className='hover:bg-slate-50 cursor-pointer transition-colors'
+                        >
+                          <td className='px-6 py-4 text-[10px] font-bold text-slate-500 whitespace-nowrap'>
+                            {new Date(batch.batch_date).toLocaleDateString()}
+                          </td>
+                          <td className='px-6 py-4'>
+                            <span className='font-mono font-black text-teal-700 text-sm'>
+                              {batch.batch_number}
+                            </span>
+                          </td>
+                          <td className='px-6 py-4 font-black uppercase text-xs'>
+                            {batch.hardware_inventory?.supplier || "N/A"}
+                          </td>
+                          <td className='px-6 py-4 font-black uppercase text-xs max-w-[160px] truncate'>
+                            {batch.hardware_inventory?.name}
+                          </td>
+                          <td className='px-6 py-4 font-mono text-[10px] text-slate-500'>
+                            {batch.hardware_inventory?.sku}
+                          </td>
+                          <td className='px-6 py-4 text-center font-black'>
+                            {batch.current_stock}{" "}
+                            <span className='text-[10px] font-bold text-slate-400'>
+                              {batch.hardware_inventory?.unit}
+                            </span>
+                          </td>
+                          <td className='px-6 py-4 text-right font-bold text-sm'>
+                            ₱{batch.unit_cost?.toLocaleString()}
+                          </td>
+                          <td className='px-6 py-4 text-right font-black text-sm'>
+                            ₱
+                            {(
+                              batch.unit_cost * batch.current_stock
+                            ).toLocaleString()}
+                          </td>
+                          <td className='px-6 py-4 text-right'>
+                            <div className='flex justify-end'>
+                              {isExpanded ? (
+                                <ChevronUp size={16} />
+                              ) : (
+                                <ChevronDown size={16} />
+                              )}
                             </div>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan='9' className='px-6 py-12 text-center'>
-                    <p className='text-xs font-black uppercase text-slate-500'>
-                      No inbound records found
-                    </p>
-                    <p className='text-[10px] font-bold text-slate-400 mt-2 uppercase'>
-                      Try adjusting search keywords or date filters.
-                    </p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan='9' className='p-0 bg-slate-50'>
+                              <div className='print-area'>
+                                {/* Toolbar */}
+                                <div className='bg-black text-white px-8 py-4 flex justify-between items-center no-print'>
+                                  <h2 className='font-black uppercase tracking-widest text-sm flex items-center gap-2'>
+                                    <Tag size={16} />{" "}
+                                    {batch.hardware_inventory?.supplier}
+                                  </h2>
+                                  <div className='flex gap-2'>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.print();
+                                      }}
+                                      className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'
+                                    >
+                                      <Printer size={14} /> Print Record
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleGmailSend(batch);
+                                      }}
+                                      className='bg-[#ea4335] px-4 py-2 rounded-lg text-[10px] font-black text-white flex items-center gap-2 hover:bg-[#d33c27] transition-all'
+                                    >
+                                      <Mail size={14} /> Email Vendor
+                                    </button>
+                                  </div>
+                                </div>
+                                {/* Record Content */}
+                                <div className='p-8 bg-white'>
+                                  <div className='flex justify-between items-start pb-4 mb-6 border-b-2 border-slate-200'>
+                                    <div>
+                                      <h1 className='text-4xl font-black uppercase italic leading-none'>
+                                        Inbound Record
+                                      </h1>
+                                      <p className='text-xs font-bold text-slate-600 mt-2'>
+                                        Ref Batch: {batch.batch_number}
+                                      </p>
+                                    </div>
+                                    <div className='text-right'>
+                                      <p className='text-sm font-black uppercase'>
+                                        Date:{" "}
+                                        {new Date(
+                                          batch.batch_date,
+                                        ).toLocaleDateString()}
+                                      </p>
+                                      <p className='text-[10px] font-bold text-slate-600 uppercase'>
+                                        Inventory History
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className='grid grid-cols-2 gap-8 mb-8'>
+                                    <div>
+                                      <h4 className='text-[10px] font-black text-slate-600 uppercase mb-1'>
+                                        Source Vendor:
+                                      </h4>
+                                      <p className='text-sm font-black uppercase'>
+                                        {batch.hardware_inventory?.supplier}
+                                      </p>
+                                      <p className='text-xs font-medium text-slate-600'>
+                                        {vendor?.address ||
+                                          "Address not listed"}
+                                      </p>
+                                      <p className='text-xs font-medium text-slate-600'>
+                                        {vendor?.email || "Email not listed"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <table className='w-full text-left mb-6'>
+                                    <thead>
+                                      <tr className='bg-black text-white text-[10px] uppercase font-black'>
+                                        <th className='py-3'>SKU</th>
+                                        <th className='py-3'>Description</th>
+                                        <th className='py-3 text-center'>
+                                          Qty Received
+                                        </th>
+                                        <th className='py-3 text-center'>
+                                          Unit
+                                        </th>
+                                        <th className='py-3 text-right'>
+                                          Unit Cost
+                                        </th>
+                                        <th className='py-3 text-right'>
+                                          Total Value
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <tr className='border-b border-slate-100'>
+                                        <td className='py-4 text-[10px] font-mono font-bold text-slate-600'>
+                                          #{batch.hardware_inventory?.sku}
+                                        </td>
+                                        <td className='py-4 text-sm font-black uppercase'>
+                                          {batch.hardware_inventory?.name}
+                                        </td>
+                                        <td className='py-4 text-center font-black'>
+                                          {batch.current_stock}
+                                        </td>
+                                        <td className='py-4 text-center text-xs font-bold text-slate-600 uppercase'>
+                                          {batch.hardware_inventory?.unit}
+                                        </td>
+                                        <td className='py-4 text-right text-sm font-bold'>
+                                          ₱{batch.unit_cost?.toLocaleString()}
+                                        </td>
+                                        <td className='py-4 text-right text-sm font-black'>
+                                          ₱
+                                          {(
+                                            batch.unit_cost *
+                                            batch.current_stock
+                                          ).toLocaleString()}
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className='border-t-2 border-slate-200'>
+                                        <td
+                                          colSpan='5'
+                                          className='py-6 text-right text-sm font-black uppercase text-slate-600'
+                                        >
+                                          Recorded Inventory Value:
+                                        </td>
+                                        <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>
+                                          ₱
+                                          {(
+                                            batch.unit_cost *
+                                            batch.current_stock
+                                          ).toLocaleString()}
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan='9' className='px-6 py-12 text-center'>
+                      <p className='text-xs font-black uppercase text-slate-500'>
+                        No inbound records found
+                      </p>
+                      <p className='text-[10px] font-bold text-slate-400 mt-2 uppercase'>
+                        Try adjusting search keywords or date filters.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Pagination */}
