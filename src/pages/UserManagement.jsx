@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import {
   CheckCircle,
@@ -14,11 +14,7 @@ const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     // Fetches profile data from your existing profiles table
     const { data, error } = await supabase
       .from("profiles")
@@ -30,7 +26,12 @@ const UserManagement = () => {
     } else {
       console.error("Error fetching users:", error.message);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchUsers();
+  }, [fetchUsers]);
 
   const updateStatus = async (userId, newStatus) => {
     const { error } = await supabase

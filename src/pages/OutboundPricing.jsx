@@ -64,28 +64,24 @@ const OutboundPricing = () => {
             <tbody className='divide-y divide-slate-100'>
               <OutboundRow
                 name="PVC BLUE Fittings 1/2'"
-                landed='15.70'
                 markup='35'
                 srp='21.20'
                 final='22.00'
               />
               <OutboundRow
                 name='STANLEY Hand Riveter'
-                landed='525.00'
                 markup='30'
                 srp='682.50'
                 final='685.00'
               />
               <OutboundRow
                 name='LOTUS Welding Mask'
-                landed='770.00'
                 markup='25'
                 srp='962.50'
                 final='965.00'
               />
               <OutboundRow
                 name='Electrical Wire (100m)'
-                landed='2,570.00'
                 markup='20'
                 srp='3,084.00'
                 final='3,100.00'
@@ -103,7 +99,7 @@ const OutboundPricing = () => {
 };
 
 // Sub-component for individual outbound pricing lines
-const OutboundRow = ({ name, landed, markup, srp, final }) => (
+const OutboundRow = ({ name, markup, srp, final }) => (
   <tr className='hover:bg-teal-50/30 transition-colors group'>
     <td className='px-6 py-5'>
       <div className='flex items-center gap-3'>

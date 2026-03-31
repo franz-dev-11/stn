@@ -823,10 +823,10 @@ const Dashboard = () => {
     <main className='flex-1 p-3 sm:p-4 md:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans overflow-x-hidden'>
       <header className='mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
         <div>
-          <h1 className='text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
+          <h1 className='text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex flex-wrap items-center gap-2 sm:gap-3'>
             <BarChart3 className='text-teal-600' size={32} /> DASHBOARD
           </h1>
-          <p className='text-slate-600 font-bold text-xs uppercase tracking-[0.2em] mt-2'>
+          <p className='mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-slate-600'>
             Live SQL Analytics | Inventory, Sales, Procurement
           </p>
         </div>

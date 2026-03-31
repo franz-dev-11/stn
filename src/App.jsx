@@ -29,9 +29,9 @@ const AppLayout = ({ session }) => {
   if (!session) return <Navigate to='/login' replace />;
 
   return (
-    <div className='flex h-screen w-full overflow-hidden'>
+    <div className='flex min-h-screen w-full overflow-x-hidden md:h-screen md:overflow-hidden'>
       <button
-        className='fixed top-6 right-6 z-[60] md:hidden flex items-center justify-center p-2 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-all duration-300'
+        className='fixed top-4 right-4 sm:top-6 sm:right-6 z-60 md:hidden flex items-center justify-center p-2 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-all duration-300'
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         aria-label='Toggle menu'
       >

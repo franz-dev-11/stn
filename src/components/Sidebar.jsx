@@ -189,7 +189,7 @@ const Sidebar = ({
           />
         </div>
 
-        <div className='flex-1 overflow-y-hidden px-3'>
+        <div className='flex-1 overflow-y-auto px-3'>
           {/* Render standard sections */}
           {menuSections.map((section, idx) => (
             <div

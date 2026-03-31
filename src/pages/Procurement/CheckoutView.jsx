@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { ChevronLeft, Tag, Printer, Mail, CheckCircle } from "lucide-react";
 
 const CheckoutView = ({
@@ -9,16 +9,24 @@ const CheckoutView = ({
   handleCompleteTransaction,
   isCompleting,
 }) => {
-  const handlePrintQuotation = (idx) => {
+  const quoteIds = useMemo(() => {
+    return Object.fromEntries(
+      Object.keys(groupedOrders).map((supplierName, index) => [
+        supplierName,
+        `QTN-${String(index + 1).padStart(4, "0")}`,
+      ]),
+    );
+  }, [groupedOrders]);
+
+  const handlePrintQuotation = () => {
     window.print();
   };
 
   const handleGmailSend = (supplierName, items) => {
     const supplierObj = suppliers.find((s) => s.name === supplierName);
     const email = supplierObj?.email || "";
-    const subject = encodeURIComponent(
-      `Quotation Request: QTN-${Date.now().toString().slice(-6)}`,
-    );
+    const quoteId = quoteIds[supplierName] || "QTN-0000";
+    const subject = encodeURIComponent(`Quotation Request: ${quoteId}`);
     const body = encodeURIComponent(
       `Items Requested:\n` +
         items
@@ -106,7 +114,7 @@ const CheckoutView = ({
                 </h2>
                 <div className='flex gap-2'>
                   <button
-                    onClick={() => handlePrintQuotation(idx)}
+                    onClick={handlePrintQuotation}
                     className='bg-white text-black px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-slate-200 flex items-center gap-2'
                   >
                     <Printer size={14} /> Print PO
@@ -128,7 +136,7 @@ const CheckoutView = ({
                       Purchase Quotation
                     </h1>
                     <p className='text-xs font-bold text-slate-500 mt-2'>
-                      ID: QTN-{Date.now().toString().slice(-6)}
+                      ID: {quoteIds[supName] || "QTN-0000"}
                     </p>
                   </div>
                   <div className='text-right'>

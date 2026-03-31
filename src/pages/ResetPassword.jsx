@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import stnLogo from "../assets/stn logo.png";
@@ -14,18 +14,21 @@ const ResetPassword = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const invalidResetLink = !searchParams.get("code");
 
-  // Check if we have a valid recovery token when component mounts
-  useEffect(() => {
-    const token = searchParams.get("code");
-    if (!token) {
-      setError("Invalid reset link. Please request a new password reset.");
-    }
-  }, [searchParams]);
+  const displayError =
+    error ||
+    (invalidResetLink
+      ? "Invalid reset link. Please request a new password reset."
+      : "");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    if (invalidResetLink) {
+      return;
+    }
 
     // Validation
     if (!password || !confirmPassword) {
@@ -64,7 +67,7 @@ const ResetPassword = () => {
       setTimeout(() => {
         navigate("/login", { replace: true });
       }, 2000);
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred. Please try again.");
       setIsLoading(false);
     }
@@ -72,7 +75,7 @@ const ResetPassword = () => {
 
   return (
     <div className='min-h-screen bg-[#d8ece8] px-4 py-6 sm:px-6 lg:px-10'>
-      <div className='mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-7xl overflow-hidden rounded-[28px] bg-white shadow-[0_30px_80px_rgba(7,64,60,0.18)]'>
+      <div className='mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-7xl overflow-visible rounded-2xl sm:rounded-[28px] bg-white shadow-[0_30px_80px_rgba(7,64,60,0.18)] lg:overflow-hidden'>
         {/* Left Panel - Teal with Form */}
         <section className='relative flex w-full flex-col justify-center bg-[#0d6f69] px-8 py-10 text-white sm:px-12 lg:w-[38%] lg:px-14'>
           <div className='absolute inset-y-0 right-0 hidden w-px bg-white/10 lg:block' />
@@ -156,10 +159,10 @@ const ResetPassword = () => {
                 </label>
 
                 {/* Error Message */}
-                {error && (
+                {displayError && (
                   <div className='flex items-start gap-3 rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3'>
                     <AlertCircle size={18} className='mt-0.5 shrink-0 text-red-300' />
-                    <p className='text-sm text-red-100'>{error}</p>
+                    <p className='text-sm text-red-100'>{displayError}</p>
                   </div>
                 )}
 
@@ -179,7 +182,13 @@ const ResetPassword = () => {
                 {/* Submit Button */}
                 <button
                   type='submit'
-                  disabled={isLoading || !password || !confirmPassword || password !== confirmPassword}
+                  disabled={
+                    isLoading ||
+                    invalidResetLink ||
+                    !password ||
+                    !confirmPassword ||
+                    password !== confirmPassword
+                  }
                   className='w-full bg-white px-4 py-3 font-semibold text-[#0d6f69] outline-none transition-all hover:bg-white/90 disabled:opacity-50'
                 >
                   {isLoading ? "Resetting..." : "Reset Password"}

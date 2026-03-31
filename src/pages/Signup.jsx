@@ -55,7 +55,7 @@ const Signup = () => {
 
   return (
     <div className='min-h-screen bg-[#d8ece8] px-4 py-6 sm:px-6 lg:px-10'>
-      <div className='mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-7xl overflow-hidden rounded-[28px] bg-white shadow-[0_30px_80px_rgba(7,64,60,0.18)]'>
+      <div className='mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-7xl overflow-visible rounded-2xl sm:rounded-[28px] bg-white shadow-[0_30px_80px_rgba(7,64,60,0.18)] lg:overflow-hidden'>
         <section className='relative flex w-full flex-col justify-center bg-[#0d6f69] px-8 py-10 text-white sm:px-12 lg:w-[38%] lg:px-14'>
           <div className='absolute inset-y-0 right-0 hidden w-px bg-white/10 lg:block' />
 

@@ -19,7 +19,6 @@ import {
 const OutboundScheduling = () => {
   const [transactions, setTransactions] = useState([]);
   const [viewMode, setViewMode] = useState("table");
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All Statuses");
   const [editingId, setEditingId] = useState(null);
@@ -149,27 +148,6 @@ const OutboundScheduling = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const normalizeDate = (value) => {
-    if (!value) return null;
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return null;
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  };
-
-  const isSameDate = (a, b) => {
-    if (!a || !b) return false;
-    return (
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate()
-    );
-  };
-
-  const selectedDateTransactions = filteredTransactions.filter((tx) => {
-    const txDate = normalizeDate(tx.delivery_date);
-    return isSameDate(txDate, selectedDate);
-  });
-
   const calendarEvents = useMemo(() => {
     return filteredTransactions
       .filter((tx) => tx.delivery_date)
@@ -188,7 +166,7 @@ const OutboundScheduling = () => {
   return (
     <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-[#f3f4f6] min-h-screen relative font-sans text-black overflow-x-hidden'>
       {showSuccess && (
-        <div className='fixed top-10 left-1/2 -translate-x-1/2 z-[100] bg-black text-white px-8 py-4 rounded-xl font-black shadow-lg flex items-center gap-2 animate-bounce'>
+        <div className='fixed top-6 left-1/2 -translate-x-1/2 z-100 w-[calc(100%-1.5rem)] max-w-md bg-black text-white px-4 sm:px-8 py-3 sm:py-4 rounded-xl text-[10px] sm:text-sm font-black shadow-lg flex items-center justify-center gap-2 text-center animate-bounce'>
           <CheckCircle2 className='text-emerald-400' /> INVENTORY & BATCHES
           UPDATED
         </div>
@@ -298,19 +276,19 @@ const OutboundScheduling = () => {
       `}</style>
 
       {/* Header */}
-      <div className='flex justify-between items-center mb-8'>
+      <div className='mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div>
-          <h1 className='text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
+          <h1 className='flex flex-wrap items-center gap-2 sm:gap-3 text-2xl sm:text-3xl font-black text-slate-900 tracking-tight'>
             <Truck className='text-teal-600' size={32} /> OUTBOUND DELIVERY
           </h1>
-          <p className='text-slate-600 font-bold text-xs uppercase tracking-[0.2em] mt-2'>
+          <p className='mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-slate-600'>
             Dispatch Queue | Delivery Scheduling
           </p>
         </div>
-        <div className='flex bg-white rounded-xl p-1 shadow-sm'>
+        <div className='flex w-full sm:w-auto overflow-x-auto bg-white rounded-xl p-1 shadow-sm'>
           <button
             onClick={() => setViewMode("table")}
-            className={`px-6 py-2 rounded-lg flex items-center gap-2 text-xs font-black uppercase transition-all ${
+            className={`px-4 sm:px-6 py-2 rounded-lg flex items-center gap-2 text-[10px] sm:text-xs font-black uppercase whitespace-nowrap transition-all ${
               viewMode === "table"
                 ? "bg-black text-white"
                 : "text-black hover:bg-slate-100"
@@ -320,7 +298,7 @@ const OutboundScheduling = () => {
           </button>
           <button
             onClick={() => setViewMode("calendar")}
-            className={`px-6 py-2 rounded-lg flex items-center gap-2 text-xs font-black uppercase transition-all ${
+            className={`px-4 sm:px-6 py-2 rounded-lg flex items-center gap-2 text-[10px] sm:text-xs font-black uppercase whitespace-nowrap transition-all ${
               viewMode === "calendar"
                 ? "bg-black text-white"
                 : "text-black hover:bg-slate-100"
@@ -341,7 +319,7 @@ const OutboundScheduling = () => {
           <input
             type='text'
             placeholder='Search Order # or Customer...'
-            className='w-full pl-12 pr-4 py-4 rounded-2xl font-black uppercase text-xs outline-none focus:bg-yellow-50 transition-all shadow-sm'
+            className='w-full pl-12 pr-4 py-3 sm:py-4 rounded-2xl font-black uppercase text-xs outline-none focus:bg-yellow-50 transition-all shadow-sm'
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -352,7 +330,7 @@ const OutboundScheduling = () => {
             size={20}
           />
           <select
-            className='w-full pl-12 pr-4 py-4 rounded-2xl font-black uppercase text-xs outline-none appearance-none bg-white cursor-pointer shadow-sm'
+            className='w-full pl-12 pr-4 py-3 sm:py-4 rounded-2xl font-black uppercase text-xs outline-none appearance-none bg-white cursor-pointer shadow-sm'
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
@@ -366,7 +344,8 @@ const OutboundScheduling = () => {
 
       {viewMode === "table" ? (
         <div className='bg-white rounded-2xl shadow-sm overflow-hidden'>
-          <table className='w-full text-left'>
+          <div className='overflow-x-auto'>
+          <table className='w-full min-w-max text-left'>
             <thead>
               <tr className='bg-black text-white text-[10px] font-black uppercase'>
                 <th className='px-6 py-4'>Customer & Items</th>
@@ -452,7 +431,7 @@ const OutboundScheduling = () => {
                         <div className='flex justify-end gap-3'>
                           <button
                             onClick={() => handleSave(tx.id)}
-                            className='bg-emerald-400 p-2 rounded-lg hover:translate-x-[2px] hover:translate-y-[2px] transition-all'
+                            className='bg-emerald-400 p-2 rounded-lg hover:translate-x-0.5 hover:translate-y-0.5 transition-all'
                           >
                             <Save size={24} />
                           </button>
@@ -492,6 +471,7 @@ const OutboundScheduling = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       ) : (
         <div className='bg-white rounded-2xl p-4 shadow-sm outbound-calendar'>
@@ -505,12 +485,6 @@ const OutboundScheduling = () => {
             }}
             height='auto'
             events={calendarEvents}
-            dateClick={(info) => setSelectedDate(info.date)}
-            eventClick={(info) => {
-              if (info.event.start) {
-                setSelectedDate(info.event.start);
-              }
-            }}
             eventDisplay='block'
             dayMaxEvents={3}
           />
