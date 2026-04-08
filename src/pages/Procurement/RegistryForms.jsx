@@ -6,6 +6,7 @@ export const ItemRegistry = ({ suppliers, onRefresh }) => {
   const [form, setForm] = useState({
     name: "",
     sku: "",
+    category: "",
     supplier: "",
     price: "",
     unit: "pcs",
@@ -20,6 +21,7 @@ export const ItemRegistry = ({ suppliers, onRefresh }) => {
           {
             name: form.name,
             sku: form.sku,
+            category: form.category,
             supplier: form.supplier,
             unit: form.unit,
           },
@@ -57,6 +59,21 @@ export const ItemRegistry = ({ suppliers, onRefresh }) => {
           className='w-full p-4 border-2 border-black rounded-xl font-bold'
           onChange={(e) => setForm({ ...form, sku: e.target.value })}
         />
+        <select
+          required
+          className='w-full p-4 border-2 border-black rounded-xl font-bold'
+          onChange={(e) => setForm({ ...form, category: e.target.value })}
+        >
+          <option value=''>Select Category</option>
+          <option value='Paint'>Paint</option>
+          <option value='Tools'>Tools</option>
+          <option value='Hardware'>Hardware</option>
+          <option value='Electrical'>Electrical</option>
+          <option value='Plumbing'>Plumbing</option>
+          <option value='Lumber'>Lumber</option>
+          <option value='Fasteners'>Fasteners</option>
+          <option value='Other'>Other</option>
+        </select>
         <select
           required
           className='w-full p-4 border-2 border-black rounded-xl font-bold'
