@@ -202,6 +202,7 @@ const RecordSales = () => {
       setLastOrder({
         soNum,
         customerName,
+        transactionType,
         totalAmount,
         items: [...cart],
         date: new Date().toLocaleDateString(),
@@ -557,6 +558,14 @@ const InvoiceView = ({ order, onBack }) => (
             </span>
             <span className='font-bold uppercase text-xs text-black'>
               {order.customerName}
+            </span>
+          </div>
+          <div className='flex justify-between'>
+            <span className='text-[10px] font-black text-slate-400 uppercase'>
+              Transaction Type
+            </span>
+            <span className='font-bold uppercase text-xs text-black'>
+              {order.transactionType}
             </span>
           </div>
           <div className='flex justify-between'>
