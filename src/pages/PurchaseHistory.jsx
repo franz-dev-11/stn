@@ -106,10 +106,16 @@ const PurchaseHistory = () => {
       (s) => s.name === receiptGroup.supplier,
     );
     const email = vendor?.email || "";
-    const itemsList = receiptGroup.items.map((item) => `${item.hardware_inventory?.name} (${item.quantity})`).join(", ");
+    const totalAmount = receiptGroup.totalAmount;
     const subject = encodeURIComponent(`Inquiry: Receipt from ${receiptGroup.supplier}`);
     const body = encodeURIComponent(
-      `Regarding Receipt items: ${itemsList}\nTotal Amount: ₱${receiptGroup.totalAmount.toLocaleString()}`,
+      `Dear ${receiptGroup.supplier}\n\n` +
+      `I hope you are having a productive week.\n\n` +
+      `We would like to proceed with the purchase of the following items. Please find the details of our order below based on the quoted total of ₱${totalAmount.toLocaleString()}\n` +
+      `Regarding Receipt items:\n\n` +
+      receiptGroup.items.map((item) => `• ${item.hardware_inventory?.name} (${item.quantity})`).join("\n") +
+      `\nTotal Amount: ₱${totalAmount.toLocaleString()}\n\n` +
+      `For further information, please see the breakdown of our requirements in the attached file.`
     );
     window.open(
       `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
@@ -286,15 +292,6 @@ const PurchaseHistory = () => {
                                       className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'
                                     >
                                       <Printer size={14} /> Print Record
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleGmailSend(receipt);
-                                      }}
-                                      className='bg-[#ea4335] px-4 py-2 rounded-lg text-[10px] font-black text-white flex items-center gap-2 hover:bg-[#d33c27] transition-all'
-                                    >
-                                      <Mail size={14} /> Email Vendor
                                     </button>
                                   </div>
                                 </div>

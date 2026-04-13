@@ -25,13 +25,16 @@ const CheckoutView = ({
   const handleGmailSend = (supplierName, items) => {
     const supplierObj = suppliers.find((s) => s.name === supplierName);
     const email = supplierObj?.email || "";
-    const quoteId = quoteIds[supplierName] || "QTN-0000";
-    const subject = encodeURIComponent(`Quotation Request: ${quoteId}`);
+    const totalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    const subject = encodeURIComponent(`Inquiry: Receipt from ${supplierName}`);
     const body = encodeURIComponent(
-      `Items Requested:\n` +
-        items
-          .map((i) => `- ${i.name} [SKU: ${i.sku}]: ${i.quantity} ${i.unit}`)
-          .join("\n"),
+      `Dear ${supplierName}\n\n` +
+      `I hope you are having a productive week.\n\n` +
+      `We would like to proceed with the purchase of the following items. Please find the details of our order below based on the quoted total of ₱${totalAmount.toLocaleString()}\n` +
+      `Regarding Receipt items:\n\n` +
+      items.map((i) => `• ${i.name} (${i.quantity})`).join("\n") +
+      `\nTotal Amount: ₱${totalAmount.toLocaleString()}\n\n` +
+      `For further information, please see the breakdown of our requirements in the attached file.`
     );
     window.open(
       `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
