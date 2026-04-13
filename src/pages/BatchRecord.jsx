@@ -13,20 +13,20 @@ const BatchRecord = () => {
   useEffect(() => {
     const fetchBatch = async () => {
       try {
-        const [itemsRes, batchRes] = await Promise.all([
-          supabase
-            .from("order_scheduling")
-            .select("*")
-            .eq("order_number", batchRef),
-          supabase
-            .from("inventory_batches")
-            .select("batch_date, current_stock")
-            .eq("batch_number", batchRef)
-            .single(),
-        ]);
+        const itemsRes = await supabase
+          .from("order_scheduling")
+          .select("*")
+          .eq("order_number", batchRef);
 
         const fetchedItems = itemsRes.data || [];
         setItems(fetchedItems);
+
+        // Try inventory_batches — ignore errors (row may not exist yet)
+        const batchRes = await supabase
+          .from("inventory_batches")
+          .select("batch_date, current_stock")
+          .eq("batch_number", batchRef)
+          .maybeSingle();
 
         if (batchRes.data?.batch_date) {
           setBatchDate(batchRes.data.batch_date);
@@ -34,7 +34,7 @@ const BatchRecord = () => {
           setBatchDate(fetchedItems[0].date_arrived);
         }
 
-        if (fetchedItems.length === 0 && !batchRes.data) {
+        if (fetchedItems.length === 0) {
           setNotFound(true);
         }
       } catch (err) {
