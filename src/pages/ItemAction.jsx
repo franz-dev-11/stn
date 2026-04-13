@@ -97,7 +97,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
     window.print();
   };
 
-  const qrUrl = `${window.location.origin}${window.location.pathname}?po=${batchRef}`;
+  const qrUrl = `${window.location.origin}/batch/${batchRef}`;
 
   return (
     <div className='min-h-screen bg-slate-50 flex items-center justify-center p-4'>
@@ -114,22 +114,21 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
               position: fixed !important;
               left: 0 !important; top: 0 !important;
               width: 105mm !important; height: 148mm !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
               border: none !important; box-shadow: none !important;
               margin: 0 !important; padding: 0 !important;
               border-radius: 0 !important;
-              display: flex !important;
-              align-items: center !important;
-              justify-content: center !important;
             }
             .printable-card {
               display: flex !important;
-              flex-direction: column !important;
               align-items: center !important;
               justify-content: center !important;
-              text-align: center !important;
               width: 105mm !important;
               height: 148mm !important;
             }
+            .print-hide { display: none !important; }
           }
         `}
       </style>
@@ -162,27 +161,22 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
 
         {/* --- PRINTABLE SECTION --- */}
         <div className='printable-card'>
-          <div className='text-center mb-8 pb-8'>
-            <div className='flex justify-center mb-6'>
-              <div className='p-4 bg-white rounded-2xl shadow-sm'>
-                <QRCodeSVG
-                  value={qrUrl}
-                  size={200}
-                  level='H'
-                  includeMargin={true}
-                />
-              </div>
-            </div>
+          <div className='flex justify-center'>
+            <QRCodeSVG
+              value={qrUrl}
+              size={220}
+              level='H'
+              includeMargin={true}
+            />
+          </div>
 
-            <div className='space-y-1'>
-              <p className='text-[10px] font-black text-teal-600 uppercase tracking-[0.2em]'>
-                {productName || "Batch Record"}
-              </p>
-              <h1 className='text-3xl font-black text-slate-900 tracking-tight uppercase'>
-                {batchRef}
-              </h1>
-            </div>
-
+          <div className='print-hide space-y-1 text-center mt-6'>
+            <p className='text-[10px] font-black text-teal-600 uppercase tracking-[0.2em]'>
+              {productName || "Batch Record"}
+            </p>
+            <h1 className='text-3xl font-black text-slate-900 tracking-tight uppercase'>
+              {batchRef}
+            </h1>
             <div className='mt-4 flex items-center justify-center gap-2'>
               <div className='px-3 py-1 bg-slate-100 rounded-full flex items-center gap-2'>
                 <Calendar size={14} className='text-slate-500' />

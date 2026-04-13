@@ -182,7 +182,7 @@ const InboundScheduling = () => {
     return filteredOrders
       .filter((o) => o.eta)
       .map((o) => {
-        const displayStatus = o.status === 'Cancelled' ? 'Cancelled' : o.date_arrived ? 'Arrived' : o.status === 'In Transit' ? 'In Transit' : 'Pending';
+        const displayStatus = o.status === 'Cancelled' ? 'Cancelled' : o.status === 'Arrived' ? 'Arrived' : o.status === 'In Transit' ? 'In Transit' : 'Pending';
         const colors = statusColors[displayStatus] || { background: '#9ca3af', text: '#fff' };
         return {
           id: String(o.id),

@@ -21,6 +21,7 @@ const Signup = lazy(() => import("./pages/Signup"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
+const BatchRecord = lazy(() => import("./pages/BatchRecord"));
 
 const AppLayout = ({ session }) => {
   const [currentPage, setCurrentPage] = useState("Dashboard");
@@ -116,6 +117,7 @@ function App() {
         <Route path='/login' element={<Login />} />
         <Route path='/signup' element={<Signup />} />
         <Route path='/reset-password' element={<ResetPassword />} />
+        <Route path='/batch/:batchRef' element={<BatchRecord />} />
 
         {/* Pending approval page – just needs a valid session */}
         <Route
