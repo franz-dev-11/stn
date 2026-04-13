@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import {
   LayoutDashboardIcon,
@@ -26,6 +26,7 @@ const Sidebar = ({
   setIsMobileMenuOpen,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState({
     name: "User",
     role: "Staff",
@@ -151,7 +152,7 @@ const Sidebar = ({
       : null;
 
   const NavItem = ({ icon, label, path }) => {
-    const isActive = currentPage === label;
+    const isActive = location.pathname === path;
     return (
       <div
         onClick={() => {

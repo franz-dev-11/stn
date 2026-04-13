@@ -21,12 +21,21 @@ const RecordSales = () => {
   const [items, setItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [view, setView] = useState("browse");
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("pos_cart");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [customerName, setCustomerName] = useState("Walk-in Customer");
   const [transactionType, setTransactionType] = useState("walk-in");
   const [lastOrder, setLastOrder] = useState(null);
+
+  useEffect(() => {
+    sessionStorage.setItem("pos_cart", JSON.stringify(cart));
+  }, [cart]);
 
   useEffect(() => {
     fetchInventory();
@@ -198,6 +207,7 @@ const RecordSales = () => {
         date: new Date().toLocaleDateString(),
       });
       setCart([]);
+      sessionStorage.removeItem("pos_cart");
       setIsCartOpen(false);
       setView("invoice");
       fetchInventory();
