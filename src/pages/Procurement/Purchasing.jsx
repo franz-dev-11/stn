@@ -4,6 +4,7 @@ import { ItemRegistry, SupplierRegistry } from "./RegistryForms";
 import CartDrawer from "./CartDrawer";
 import ItemCard from "./ItemCard";
 import CheckoutView from "./CheckoutView";
+import { supabase } from "../../supabaseClient";
 import {
   ShoppingCart,
   Search,
@@ -18,6 +19,24 @@ import {
 const Purchasing = () => {
   const data = usePurchasing();
   const [selectedSupplier, setSelectedSupplier] = useState("All");
+
+  // Delete item function
+  const deleteItem = async (id) => {
+    try {
+      // Delete from product_pricing first
+      await supabase.from("product_pricing").delete().eq("product_id", id);
+      // Then delete from hardware_inventory
+      const { error } = await supabase
+        .from("hardware_inventory")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      // Refresh data
+      data.fetchData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   // Filter logic para sa Catalog
   const filteredCatalog = useMemo(() => {
@@ -151,6 +170,7 @@ const Purchasing = () => {
                       key={item.id}
                       item={item}
                       onAdd={data.addToCart}
+                      onDelete={deleteItem}
                     />
                   ))
                 ) : (
@@ -179,7 +199,7 @@ const Purchasing = () => {
                   <h2 className='text-4xl font-black italic text-teal-600'>
                     ₱
                     {data.cart
-                      .reduce((s, i) => s + i.price * i.qty, 0)
+                      .reduce((s, i) => s + i.price * i.quantity, 0)
                       .toLocaleString()}
                   </h2>
                   <div className='mt-4 space-y-2'>
@@ -192,7 +212,7 @@ const Purchasing = () => {
                     <p className='text-[10px] font-bold text-slate-500'>
                       Quantity:{" "}
                       <span className='font-black text-slate-700'>
-                        {data.cart.reduce((sum, item) => sum + item.qty, 0)}
+                        {data.cart.reduce((sum, item) => sum + item.quantity, 0)}
                       </span>
                     </p>
                   </div>

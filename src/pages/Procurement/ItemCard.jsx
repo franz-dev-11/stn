@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Package, Plus, Minus } from "lucide-react";
+import { Package, Plus, Minus, Trash2 } from "lucide-react";
 
-const ItemCard = ({ item, onAdd }) => {
+const ItemCard = ({ item, onAdd, onDelete }) => {
   const [qty, setQty] = useState(1);
 
   return (
@@ -10,13 +10,27 @@ const ItemCard = ({ item, onAdd }) => {
         <div className='p-3 bg-slate-100 rounded-2xl'>
           <Package size={20} className='text-slate-900' />
         </div>
-        <div className='text-right'>
-          <p className='text-[10px] font-black text-slate-500 uppercase'>
-            Total Stock
-          </p>
-          <p className='font-black text-sm text-slate-900'>
-            {item.stock_balance || 0}
-          </p>
+        <div className='flex items-center gap-2'>
+          <div className='text-right'>
+            <p className='text-[10px] font-black text-slate-500 uppercase'>
+              Total Stock
+            </p>
+            <p className='font-black text-sm text-slate-900'>
+              {item.stock_balance || 0}
+            </p>
+          </div>
+          {onDelete && (
+            <button
+              onClick={() => {
+                if (confirm(`Delete "${item.name}"?`)) {
+                  onDelete(item.id);
+                }
+              }}
+              className='text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all'
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -39,9 +53,11 @@ const ItemCard = ({ item, onAdd }) => {
             <Minus size={14} />
           </button>
           <input
-            readOnly
+            type='number'
+            min='1'
             value={qty}
-            className='w-full text-center font-black bg-white text-slate-900'
+            onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+            className='w-full text-center font-black bg-white text-slate-900 outline-none focus:bg-yellow-50'
           />
           <button
             onClick={() => setQty(qty + 1)}

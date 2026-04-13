@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import {
   Printer,
@@ -30,13 +30,13 @@ const PurchaseHistory = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Fetch Batches
-      const { data: batchData, error: batchError } = await supabase
-        .from("inventory_batches")
+      // Fetch all order items
+      const { data: orderData, error: orderError } = await supabase
+        .from("order_scheduling")
         .select(
           `
           *,
-          hardware_inventory (
+          hardware_inventory:product_id (
             name,
             sku,
             unit,
@@ -44,13 +44,13 @@ const PurchaseHistory = () => {
           )
         `,
         )
-        .order("batch_date", { ascending: false });
+        .order("date_ordered", { ascending: false });
 
       // Fetch Suppliers for contact info
       const { data: supData } = await supabase.from("suppliers").select("*");
 
-      if (batchError) console.error("Error fetching data:", batchError);
-      setBatches(batchData || []);
+      if (orderError) console.error("Error fetching data:", orderError);
+      setBatches(orderData || []);
       setSuppliers(supData || []);
     };
     fetchData();
@@ -61,31 +61,55 @@ const PurchaseHistory = () => {
     const itemName = batch.hardware_inventory?.name || "";
     const vendorName = batch.hardware_inventory?.supplier || "";
     const matchesSearch =
-      batch.batch_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      batch.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       vendorName.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const batchDate = new Date(batch.batch_date).toISOString().split("T")[0];
-    const matchesStart = !startDate || batchDate >= startDate;
-    const matchesEnd = !endDate || batchDate <= endDate;
+    const orderDate = new Date(batch.date_ordered).toISOString().split("T")[0];
+    const matchesStart = !startDate || orderDate >= startDate;
+    const matchesEnd = !endDate || orderDate <= endDate;
 
     return matchesSearch && matchesStart && matchesEnd;
   });
 
-  const currentItems = filteredBatches.slice(
+  // Group items by supplier and date
+  const groupedReceipts = useMemo(() => {
+    const grouped = {};
+    filteredBatches.forEach((batch) => {
+      const supplier = batch.hardware_inventory?.supplier || "Unknown Supplier";
+      const dateKey = new Date(batch.date_ordered).toISOString().split("T")[0];
+      const key = `${supplier}|${dateKey}`;
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          id: key,
+          supplier,
+          date_ordered: batch.date_ordered,
+          items: [],
+          totalAmount: 0,
+        };
+      }
+      grouped[key].items.push(batch);
+      grouped[key].totalAmount += (batch.unit_cost || 0) * (batch.quantity || 0);
+    });
+    return Object.values(grouped);
+  }, [filteredBatches]);
+
+  const currentItems = groupedReceipts.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
-  const totalPages = Math.ceil(filteredBatches.length / itemsPerPage);
+  const totalPages = Math.ceil(groupedReceipts.length / itemsPerPage);
 
-  const handleGmailSend = (batch) => {
+  const handleGmailSend = (receiptGroup) => {
     const vendor = suppliers.find(
-      (s) => s.name === batch.hardware_inventory?.supplier,
+      (s) => s.name === receiptGroup.supplier,
     );
     const email = vendor?.email || "";
-    const subject = encodeURIComponent(`Inquiry: Batch ${batch.batch_number}`);
+    const itemsList = receiptGroup.items.map((item) => `${item.hardware_inventory?.name} (${item.quantity})`).join(", ");
+    const subject = encodeURIComponent(`Inquiry: Receipt from ${receiptGroup.supplier}`);
     const body = encodeURIComponent(
-      `Regarding Item: ${batch.hardware_inventory?.name} (${batch.hardware_inventory?.sku})\nQuantity: ${batch.current_stock}`,
+      `Regarding Receipt items: ${itemsList}\nTotal Amount: ₱${receiptGroup.totalAmount.toLocaleString()}`,
     );
     window.open(
       `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
@@ -185,62 +209,53 @@ const PurchaseHistory = () => {
               <thead>
                 <tr className='bg-black text-white text-[10px] font-black uppercase'>
                   <th className='px-6 py-4'>Date</th>
-                  <th className='px-6 py-4'>Batch #</th>
                   <th className='px-6 py-4'>Vendor</th>
-                  <th className='px-6 py-4'>Item</th>
-                  <th className='px-6 py-4'>SKU</th>
-                  <th className='px-6 py-4 text-center'>Qty</th>
-                  <th className='px-6 py-4 text-right'>Unit Cost</th>
-                  <th className='px-6 py-4 text-right'>Total Value</th>
+                  <th className='px-6 py-4'>Items</th>
+                  <th className='px-6 py-4 text-center'>Count</th>
+                  <th className='px-6 py-4 text-right'>Total Amount</th>
                   <th className='px-6 py-4 text-right'>Actions</th>
                 </tr>
               </thead>
               <tbody className='divide-y divide-slate-100'>
                 {currentItems.length > 0 ? (
-                  currentItems.map((batch) => {
+                  currentItems.map((receipt) => {
                     const vendor = suppliers.find(
-                      (s) => s.name === batch.hardware_inventory?.supplier,
+                      (s) => s.name === receipt.supplier,
                     );
-                    const isExpanded = expandedBatch === batch.id;
+                    const isExpanded = expandedBatch === receipt.id;
                     return (
-                      <React.Fragment key={batch.id}>
+                      <React.Fragment key={receipt.id}>
                         <tr
                           onClick={() =>
-                            setExpandedBatch(isExpanded ? null : batch.id)
+                            setExpandedBatch(isExpanded ? null : receipt.id)
                           }
                           className='hover:bg-slate-50 cursor-pointer transition-colors'
                         >
                           <td className='px-6 py-4 text-[10px] font-bold text-slate-500 whitespace-nowrap'>
-                            {new Date(batch.batch_date).toLocaleDateString()}
+                            {new Date(receipt.date_ordered).toLocaleDateString()}
                           </td>
-                          <td className='px-6 py-4'>
-                            <span className='font-mono font-black text-teal-700 text-sm'>
-                              {batch.batch_number}
-                            </span>
+                          <td className='px-6 py-4 font-black uppercase text-sm'>
+                            {receipt.supplier || "N/A"}
                           </td>
-                          <td className='px-6 py-4 font-black uppercase text-xs'>
-                            {batch.hardware_inventory?.supplier || "N/A"}
-                          </td>
-                          <td className='px-6 py-4 font-black uppercase text-xs max-w-[160px] truncate'>
-                            {batch.hardware_inventory?.name}
-                          </td>
-                          <td className='px-6 py-4 font-mono text-[10px] text-slate-500'>
-                            {batch.hardware_inventory?.sku}
+                          <td className='px-6 py-4 text-xs max-w-[300px]'>
+                            <div className='space-y-1'>
+                              {receipt.items.slice(0, 2).map((item, idx) => (
+                                <div key={idx} className='text-[10px] font-bold text-slate-700'>
+                                  {item.hardware_inventory?.name}
+                                </div>
+                              ))}
+                              {receipt.items.length > 2 && (
+                                <div className='text-[10px] font-bold text-slate-500 italic'>
+                                  +{receipt.items.length - 2} more
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className='px-6 py-4 text-center font-black'>
-                            {batch.current_stock}{" "}
-                            <span className='text-[10px] font-bold text-slate-400'>
-                              {batch.hardware_inventory?.unit}
-                            </span>
-                          </td>
-                          <td className='px-6 py-4 text-right font-bold text-sm'>
-                            ₱{batch.unit_cost?.toLocaleString()}
+                            {receipt.items.length}
                           </td>
                           <td className='px-6 py-4 text-right font-black text-sm'>
-                            ₱
-                            {(
-                              batch.unit_cost * batch.current_stock
-                            ).toLocaleString()}
+                            ₱{receipt.totalAmount.toLocaleString()}
                           </td>
                           <td className='px-6 py-4 text-right'>
                             <div className='flex justify-end'>
@@ -254,13 +269,13 @@ const PurchaseHistory = () => {
                         </tr>
                         {isExpanded && (
                           <tr>
-                            <td colSpan='9' className='p-0 bg-slate-50'>
+                            <td colSpan='6' className='p-0 bg-slate-50'>
                               <div className='print-area'>
                                 {/* Toolbar */}
                                 <div className='bg-black text-white px-8 py-4 flex justify-between items-center no-print'>
                                   <h2 className='font-black uppercase tracking-widest text-sm flex items-center gap-2'>
                                     <Tag size={16} />{" "}
-                                    {batch.hardware_inventory?.supplier}
+                                    {receipt.supplier}
                                   </h2>
                                   <div className='flex gap-2'>
                                     <button
@@ -275,7 +290,7 @@ const PurchaseHistory = () => {
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleGmailSend(batch);
+                                        handleGmailSend(receipt);
                                       }}
                                       className='bg-[#ea4335] px-4 py-2 rounded-lg text-[10px] font-black text-white flex items-center gap-2 hover:bg-[#d33c27] transition-all'
                                     >
@@ -288,21 +303,21 @@ const PurchaseHistory = () => {
                                   <div className='flex justify-between items-start pb-4 mb-6 border-b-2 border-slate-200'>
                                     <div>
                                       <h1 className='text-4xl font-black uppercase italic leading-none'>
-                                        Inbound Record
+                                        Goods Receipt
                                       </h1>
                                       <p className='text-xs font-bold text-slate-600 mt-2'>
-                                        Ref Batch: {batch.batch_number}
+                                        {receipt.items.length} Item{receipt.items.length !== 1 ? 's' : ''}
                                       </p>
                                     </div>
                                     <div className='text-right'>
                                       <p className='text-sm font-black uppercase'>
                                         Date:{" "}
                                         {new Date(
-                                          batch.batch_date,
+                                          receipt.date_ordered,
                                         ).toLocaleDateString()}
                                       </p>
                                       <p className='text-[10px] font-bold text-slate-600 uppercase'>
-                                        Inventory History
+                                        Receipt Summary
                                       </p>
                                     </div>
                                   </div>
@@ -312,7 +327,7 @@ const PurchaseHistory = () => {
                                         Source Vendor:
                                       </h4>
                                       <p className='text-sm font-black uppercase'>
-                                        {batch.hardware_inventory?.supplier}
+                                        {receipt.supplier}
                                       </p>
                                       <p className='text-xs font-medium text-slate-600'>
                                         {vendor?.address ||
@@ -343,30 +358,32 @@ const PurchaseHistory = () => {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      <tr className='border-b border-slate-100'>
-                                        <td className='py-4 text-[10px] font-mono font-bold text-slate-600'>
-                                          #{batch.hardware_inventory?.sku}
-                                        </td>
-                                        <td className='py-4 text-sm font-black uppercase'>
-                                          {batch.hardware_inventory?.name}
-                                        </td>
-                                        <td className='py-4 text-center font-black'>
-                                          {batch.current_stock}
-                                        </td>
-                                        <td className='py-4 text-center text-xs font-bold text-slate-600 uppercase'>
-                                          {batch.hardware_inventory?.unit}
-                                        </td>
-                                        <td className='py-4 text-right text-sm font-bold'>
-                                          ₱{batch.unit_cost?.toLocaleString()}
-                                        </td>
-                                        <td className='py-4 text-right text-sm font-black'>
-                                          ₱
-                                          {(
-                                            batch.unit_cost *
-                                            batch.current_stock
-                                          ).toLocaleString()}
-                                        </td>
-                                      </tr>
+                                      {receipt.items.map((item, idx) => (
+                                        <tr key={idx} className='border-b border-slate-100'>
+                                          <td className='py-4 text-[10px] font-mono font-bold text-slate-600'>
+                                            #{item.hardware_inventory?.sku}
+                                          </td>
+                                          <td className='py-4 text-sm font-black uppercase'>
+                                            {item.hardware_inventory?.name}
+                                          </td>
+                                          <td className='py-4 text-center font-black'>
+                                            {item.quantity}
+                                          </td>
+                                          <td className='py-4 text-center text-xs font-bold text-slate-600 uppercase'>
+                                            {item.hardware_inventory?.unit}
+                                          </td>
+                                          <td className='py-4 text-right text-sm font-bold'>
+                                            ₱{item.unit_cost?.toLocaleString()}
+                                          </td>
+                                          <td className='py-4 text-right text-sm font-black'>
+                                            ₱
+                                            {(
+                                              item.unit_cost *
+                                              item.quantity
+                                            ).toLocaleString()}
+                                          </td>
+                                        </tr>
+                                      ))}
                                     </tbody>
                                     <tfoot>
                                       <tr className='border-t-2 border-slate-200'>
@@ -374,14 +391,10 @@ const PurchaseHistory = () => {
                                           colSpan='5'
                                           className='py-6 text-right text-sm font-black uppercase text-slate-600'
                                         >
-                                          Recorded Inventory Value:
+                                          Receipt Total:
                                         </td>
                                         <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>
-                                          ₱
-                                          {(
-                                            batch.unit_cost *
-                                            batch.current_stock
-                                          ).toLocaleString()}
+                                          ₱{receipt.totalAmount.toLocaleString()}
                                         </td>
                                       </tr>
                                     </tfoot>

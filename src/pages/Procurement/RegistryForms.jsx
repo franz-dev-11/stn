@@ -90,6 +90,7 @@ export const ItemRegistry = ({ suppliers, onRefresh }) => {
           <input
             required
             type='number'
+            step='0.01'
             placeholder='Price (₱)'
             className='p-4 border-2 border-black rounded-xl font-bold'
             onChange={(e) => setForm({ ...form, price: e.target.value })}

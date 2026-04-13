@@ -25,6 +25,7 @@ const RecordSales = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [customerName, setCustomerName] = useState("Walk-in Customer");
+  const [transactionType, setTransactionType] = useState("walk-in");
   const [lastOrder, setLastOrder] = useState(null);
 
   useEffect(() => {
@@ -116,11 +117,18 @@ const RecordSales = () => {
     setIsCartOpen(true);
   };
 
-  const updateCartQty = (cartId, delta, maxStock) => {
+  const updateCartQty = (cartId, deltaOrValue, maxStock) => {
     setCart((prev) =>
       prev.map((item) => {
         if (item.cartId === cartId) {
-          const newQty = Math.max(1, item.quantity + delta);
+          let newQty;
+          if (typeof deltaOrValue === "number" && deltaOrValue < 0 || deltaOrValue > 0) {
+            // It's a delta (from plus/minus buttons)
+            newQty = Math.max(1, item.quantity + deltaOrValue);
+          } else {
+            // It's a direct value (from input field)
+            newQty = Math.max(1, parseInt(deltaOrValue) || 1);
+          }
           if (newQty > maxStock) return item;
           return { ...item, quantity: newQty };
         }
@@ -145,8 +153,7 @@ const RecordSales = () => {
         .insert([
           {
             so_number: soNum,
-            customer_name: customerName,
-            total_amount: totalAmount,
+            customer_name: customerName,            transaction_type: transactionType,            total_amount: totalAmount,
             status: "Pending",
           },
         ])
@@ -431,9 +438,20 @@ const RecordSales = () => {
                       >
                         <Minus size={14} />
                       </button>
-                      <span className='font-black text-xs w-6 text-center'>
-                        {item.quantity}
-                      </span>
+                      <input
+                        type='number'
+                        min='1'
+                        max={item.activeBatch.current_stock}
+                        value={item.quantity}
+                        onChange={(e) =>
+                          updateCartQty(
+                            item.cartId,
+                            e.target.value,
+                            item.activeBatch.current_stock,
+                          )
+                        }
+                        className='font-black text-xs w-16 text-center border border-slate-200 rounded px-2 outline-none focus:border-teal-500'
+                      />
                       <button
                         onClick={() =>
                           updateCartQty(
@@ -465,6 +483,19 @@ const RecordSales = () => {
                   placeholder='Walk-in Customer / Delivery Name'
                   className='w-full border-2 border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all text-slate-800 placeholder:text-slate-300'
                 />
+              </div>
+              <div className='mb-6'>
+                <label className='text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2'>
+                  Transaction Type
+                </label>
+                <select
+                  value={transactionType}
+                  onChange={(e) => setTransactionType(e.target.value)}
+                  className='w-full border-2 border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all text-slate-800'
+                >
+                  <option value='walk-in'>Walk-in</option>
+                  <option value='delivery'>Delivery</option>
+                </select>
               </div>
               <div className='flex justify-between items-end mb-8'>
                 <p className='text-[10px] font-black text-slate-400 uppercase'>

@@ -36,90 +36,104 @@ const InboundScheduling = () => {
     setOrders(data || []);
   };
 
-  const handleSave = async (id) => {
+  const handleSave = async (firstItemId) => {
     try {
-      console.log("Starting save process for ID:", id);
+      console.log("Starting save process for Order Group with first ID:", firstItemId);
 
-      // 1. Kunin ang latest data ng scheduling record
-      const { data: order, error: fetchErr } = await supabase
-        .from("order_scheduling")
-        .select("*")
-        .eq("id", id)
-        .single();
+      // Get all items from the order group
+      const groupItems = orders.filter(
+        (o) => o.id === firstItemId || 
+                (orders.find(item => item.id === firstItemId)?.order_number === o.order_number)
+      );
 
-      if (fetchErr) throw new Error("Fetch Order Error: " + fetchErr.message);
-
-      // Check if status is transitioning to Arrived
-      const isBecomingArrived =
-        editData.status === "Arrived" && order.status !== "Arrived";
-
-      // 2. Update the Status of the Order
-      const { error: statusUpdateErr } = await supabase
-        .from("order_scheduling")
-        .update({
-          eta: editData.eta,
-          status: editData.status,
-          date_arrived:
-            editData.status === "Arrived"
-              ? new Date().toISOString()
-              : order.date_arrived,
-        })
-        .eq("id", id);
-
-      if (statusUpdateErr)
-        throw new Error("Status Update Error: " + statusUpdateErr.message);
-
-      // 3. IF ARRIVED: Record to Inventory and Batches
-      if (isBecomingArrived) {
-        console.log("Status is Arrived. Updating Inventory and Batches...");
-
-        // A. Get current inventory
-        const { data: inv, error: invFetchErr } = await supabase
-          .from("hardware_inventory")
-          .select("stock_balance, inbound_qty, outbound_qty")
-          .eq("id", order.product_id)
-          .single();
-
-        if (invFetchErr)
-          throw new Error("Inventory Fetch Error: " + invFetchErr.message);
-
-        // B. Update Hardware Inventory Table
-        const { error: invUpdateErr } = await supabase
-          .from("hardware_inventory")
-          .update({
-            inbound_qty: Number(inv?.inbound_qty || 0) + Number(order.quantity),
-            stock_balance:
-              Number(inv?.stock_balance || 0) + Number(order.quantity),
-            outbound_qty: Number(inv?.outbound_qty || 0),
-          })
-          .eq("id", order.product_id);
-
-        if (invUpdateErr)
-          throw new Error("Inventory Update Error: " + invUpdateErr.message);
-
-        // C. Insert into inventory_batches (Match sa image_28b46f.png)
-        const { error: batchErr } = await supabase
-          .from("inventory_batches")
-          .insert([
-            {
-              product_id: order.product_id,
-              batch_date: new Date().toISOString(),
-              current_stock: Number(order.quantity), // int4 sa DB
-              unit_cost: Number(order.unit_cost || 0), // numeric sa DB
-              batch_number: order.order_number || `BAT-${Date.now()}`, // text sa DB
-            },
-          ]);
-
-        if (batchErr) {
-          console.error("Batch Insert Error Details:", batchErr);
-          throw new Error("Batch Recording Error: " + batchErr.message);
-        }
-
-        console.log("Successfully recorded all data!");
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 3000);
+      if (groupItems.length === 0) {
+        const firstOrder = orders.find((o) => o.id === firstItemId);
+        groupItems.push(firstOrder);
       }
 
+      // Get the order_number from first item
+      const orderNumber = orders.find((o) => o.id === firstItemId)?.order_number;
+      
+      // Update all items in this order group
+      for (const order of groupItems) {
+        // Get latest data
+        const { data: orderData, error: fetchErr } = await supabase
+          .from("order_scheduling")
+          .select("*")
+          .eq("id", order.id)
+          .single();
+
+        if (fetchErr) throw new Error("Fetch Order Error: " + fetchErr.message);
+
+        // Check if status is transitioning to Arrived
+        const isBecomingArrived =
+          editData.status === "Arrived" && orderData.status !== "Arrived";
+
+        // Update the Status
+        const { error: statusUpdateErr } = await supabase
+          .from("order_scheduling")
+          .update({
+            eta: editData.eta,
+            status: editData.status,
+            date_arrived:
+              editData.status === "Arrived"
+                ? new Date().toISOString()
+                : orderData.date_arrived,
+          })
+          .eq("id", order.id);
+
+        if (statusUpdateErr)
+          throw new Error("Status Update Error: " + statusUpdateErr.message);
+
+        // IF ARRIVED: Record to Inventory and Batches
+        if (isBecomingArrived) {
+          console.log("Status is Arrived. Updating Inventory and Batches...");
+
+          // Get current inventory
+          const { data: inv, error: invFetchErr } = await supabase
+            .from("hardware_inventory")
+            .select("stock_balance, inbound_qty, outbound_qty")
+            .eq("id", orderData.product_id)
+            .single();
+
+          if (invFetchErr)
+            throw new Error("Inventory Fetch Error: " + invFetchErr.message);
+
+          // Update Hardware Inventory Table
+          const { error: invUpdateErr } = await supabase
+            .from("hardware_inventory")
+            .update({
+              inbound_qty: Number(inv?.inbound_qty || 0) + Number(orderData.quantity),
+              stock_balance:
+                Number(inv?.stock_balance || 0) + Number(orderData.quantity),
+              outbound_qty: Number(inv?.outbound_qty || 0),
+            })
+            .eq("id", orderData.product_id);
+
+          if (invUpdateErr)
+            throw new Error("Inventory Update Error: " + invUpdateErr.message);
+
+          // Insert into inventory_batches
+          const { error: batchErr } = await supabase
+            .from("inventory_batches")
+            .insert([
+              {
+                product_id: orderData.product_id,
+                batch_number: `${orderNumber}-${orderData.product_id}`,
+                current_stock: orderData.quantity,
+                batch_date: new Date().toISOString(),
+                unit_cost: orderData.unit_cost || 0,
+              },
+            ]);
+
+          if (batchErr)
+            throw new Error("Batch Insert Error: " + batchErr.message);
+        }
+      }
+
+      alert("Success! Order group updated.");
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
       setEditingId(null);
       fetchOrders();
     } catch (err) {
@@ -137,16 +151,50 @@ const InboundScheduling = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const groupedOrders = useMemo(() => {
+    const grouped = {};
+    filteredOrders.forEach((order) => {
+      const key = order.order_number;
+      if (!grouped[key]) {
+        grouped[key] = {
+          order_number: order.order_number,
+          supplier: order.supplier,
+          eta: order.eta,
+          status: order.status,
+          date_ordered: order.date_ordered,
+          items: [],
+          firstItemId: order.id,
+        };
+      }
+      grouped[key].items.push(order);
+    });
+    return Object.values(grouped);
+  }, [filteredOrders]);
+
   const calendarEvents = useMemo(() => {
+    const statusColors = {
+      Pending: { background: '#fbbf24', text: '#000' },
+      'In Transit': { background: '#60a5fa', text: '#fff' },
+      Arrived: { background: '#4ade80', text: '#000' },
+      Cancelled: { background: '#9ca3af', text: '#fff' },
+    };
+    
     return filteredOrders
       .filter((o) => o.eta)
-      .map((o) => ({
-        id: String(o.id),
-        title: `${o.order_number} • ${o.item_name}`,
-        start: o.eta,
-        allDay: true,
-        extendedProps: { status: o.status },
-      }));
+      .map((o) => {
+        const displayStatus = o.status === 'Cancelled' ? 'Cancelled' : o.date_arrived ? 'Arrived' : o.status === 'In Transit' ? 'In Transit' : 'Pending';
+        const colors = statusColors[displayStatus] || { background: '#9ca3af', text: '#fff' };
+        return {
+          id: String(o.id),
+          title: `${o.order_number} • ${o.item_name}`,
+          start: o.eta,
+          allDay: true,
+          backgroundColor: colors.background,
+          textColor: colors.text,
+          borderColor: colors.background,
+          extendedProps: { status: displayStatus },
+        };
+      });
   }, [filteredOrders]);
 
   return (
@@ -197,15 +245,18 @@ const InboundScheduling = () => {
         }
 
         .inbound-calendar .fc .fc-daygrid-event {
-          border: none;
+          border: none !important;
           border-radius: 0.5rem;
-          background: #3b82f6;
           padding: 0.1rem 0.35rem;
           font-size: 0.62rem;
           font-weight: 800;
           letter-spacing: 0.03em;
           cursor: pointer;
           touch-action: manipulation;
+        }
+
+        .inbound-calendar .fc-event-title {
+          font-weight: 800 !important;
         }
 
         @media (max-width: 768px) {
@@ -341,25 +392,34 @@ const InboundScheduling = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.length > 0 ? (
-                filteredOrders.map((o) => (
+              {groupedOrders.length > 0 ? (
+                groupedOrders.map((group) => (
                   <tr
-                    key={o.id}
+                    key={group.order_number}
                     className='hover:bg-yellow-50 transition-colors'
                   >
                     <td className='p-6'>
                       <span className='font-mono text-teal-700 font-black text-sm'>
-                        #{o.order_number}
+                        #{group.order_number}
                       </span>
-                      <p className='font-black uppercase text-lg leading-none mb-2'>
-                        {o.item_name}
+                      <p className='font-black uppercase text-sm leading-none mb-3 text-slate-700'>
+                        {group.items.length} item{group.items.length !== 1 ? 's' : ''}
                       </p>
-                      <p className='text-[10px] font-bold text-slate-500 uppercase'>
-                        {o.supplier} | Qty: {o.quantity}
-                      </p>
+                      <div className='space-y-2'>
+                        {group.items.map((item) => (
+                          <div key={item.id} className='text-sm'>
+                            <p className='font-black uppercase text-slate-900'>
+                              {item.item_name}
+                            </p>
+                            <p className='text-[10px] font-bold text-slate-500 uppercase'>
+                              {group.supplier} | Qty: {item.quantity}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     </td>
                     <td className='p-6'>
-                      {editingId === o.id ? (
+                      {editingId === group.firstItemId ? (
                         <input
                           type='date'
                           className='rounded-lg p-2 text-sm font-black uppercase w-full'
@@ -370,12 +430,12 @@ const InboundScheduling = () => {
                         />
                       ) : (
                         <div className='text-sm font-black text-slate-700 uppercase'>
-                          {o.eta || "TBD"}
+                          {group.eta || "TBD"}
                         </div>
                       )}
                     </td>
                     <td className='p-6'>
-                      {editingId === o.id ? (
+                      {editingId === group.firstItemId ? (
                         <select
                           className='rounded-lg p-2 text-sm font-black uppercase w-full'
                           value={editData.status}
@@ -390,22 +450,22 @@ const InboundScheduling = () => {
                       ) : (
                         <span
                           className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase ${
-                            o.status === "Arrived"
+                            group.status === "Arrived"
                               ? "bg-emerald-400 text-black"
-                              : o.status === "In Transit"
+                              : group.status === "In Transit"
                                 ? "bg-teal-400 text-black"
                                 : "bg-white text-black"
                           }`}
                         >
-                          {o.status}
+                          {group.status}
                         </span>
                       )}
                     </td>
                     <td className='p-6 text-right'>
-                      {editingId === o.id ? (
+                      {editingId === group.firstItemId ? (
                         <div className='flex justify-end gap-3'>
                           <button
-                            onClick={() => handleSave(o.id)}
+                            onClick={() => handleSave(group.firstItemId)}
                             className='bg-emerald-400 p-2 rounded-lg hover:translate-x-0.5 hover:translate-y-0.5 transition-all'
                           >
                             <Save size={24} />
@@ -420,8 +480,8 @@ const InboundScheduling = () => {
                       ) : (
                         <button
                           onClick={() => {
-                            setEditingId(o.id);
-                            setEditData({ eta: o.eta || "", status: o.status });
+                            setEditingId(group.firstItemId);
+                            setEditData({ eta: group.eta || "", status: group.status });
                           }}
                           className='p-3 hover:bg-slate-100 rounded-xl transition-all'
                         >

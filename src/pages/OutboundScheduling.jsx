@@ -149,18 +149,32 @@ const OutboundScheduling = () => {
   });
 
   const calendarEvents = useMemo(() => {
+    const statusColors = {
+      Pending: { background: '#fbbf24', text: '#000' },
+      'In Transit': { background: '#60a5fa', text: '#fff' },
+      Completed: { background: '#4ade80', text: '#000' },
+      Cancelled: { background: '#9ca3af', text: '#fff' },
+    };
+    
     return filteredTransactions
       .filter((tx) => tx.delivery_date)
-      .map((tx) => ({
-        id: String(tx.id),
-        title: `${tx.so_number} • ${tx.customer_name}`,
-        start: tx.delivery_date,
-        allDay: true,
-        extendedProps: {
-          status: tx.status,
-          lineItems: tx.sales_items?.length || 0,
-        },
-      }));
+      .map((tx) => {
+        const displayStatus = tx.status === 'Cancelled' ? 'Cancelled' : tx.status === 'Completed' ? 'Completed' : tx.status === 'In Transit' ? 'In Transit' : 'Pending';
+        const colors = statusColors[displayStatus] || { background: '#9ca3af', text: '#fff' };
+        return {
+          id: String(tx.id),
+          title: `${tx.so_number} • ${tx.customer_name}`,
+          start: tx.delivery_date,
+          allDay: true,
+          backgroundColor: colors.background,
+          textColor: colors.text,
+          borderColor: colors.background,
+          extendedProps: {
+            status: displayStatus,
+            lineItems: tx.sales_items?.length || 0,
+          },
+        };
+      });
   }, [filteredTransactions]);
 
   return (
@@ -211,15 +225,18 @@ const OutboundScheduling = () => {
         }
 
         .outbound-calendar .fc .fc-daygrid-event {
-          border: none;
+          border: none !important;
           border-radius: 0.5rem;
-          background: #3b82f6;
           padding: 0.1rem 0.35rem;
           font-size: 0.62rem;
           font-weight: 800;
           letter-spacing: 0.03em;
           cursor: pointer;
           touch-action: manipulation;
+        }
+
+        .outbound-calendar .fc-event-title {
+          font-weight: 800 !important;
         }
 
         @media (max-width: 768px) {

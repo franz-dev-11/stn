@@ -28,23 +28,16 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
       }
 
       try {
-        // 1. Fetch Items in this Batch
+        // 1. Fetch Items in this PO from order_scheduling
         const itemsRequest = supabase
-          .from("purchase_order_items")
-          .select(`*, purchase_orders (created_at, po_number)`)
-          .eq("po_number", batchRef);
+          .from("order_scheduling")
+          .select("*")
+          .eq("order_number", batchRef);
 
-        // 2. Fetch batch_date AND product_name by joining hardware_inventory
+        // 2. Try to get receipt date from inventory_batches
         const batchRequest = supabase
           .from("inventory_batches")
-          .select(
-            `
-            batch_date,
-            hardware_inventory (
-              product_name
-            )
-          `,
-          )
+          .select("batch_date")
           .eq("batch_number", batchRef)
           .single();
 
@@ -56,17 +49,22 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
         if (itemsRes.error) throw itemsRes.error;
 
         setItems(itemsRes.data || []);
-        if (itemsRes.data && itemsRes.data.length === 1) {
+        if (itemsRes.data && itemsRes.data.length > 0) {
           setSelectedItem(itemsRes.data[0]);
         }
 
-        if (batchRes.data) {
+        // Use batch_date from inventory_batches (receipt date), or fallback to date_arrived
+        if (batchRes.data?.batch_date) {
           setBatchDate(batchRes.data.batch_date);
-          // Set product name from the joined hardware_inventory table
-          setProductName(batchRes.data.hardware_inventory?.product_name || "");
+        } else if (itemsRes.data && itemsRes.data.length > 0) {
+          setBatchDate(itemsRes.data[0].date_arrived);
         }
       } catch (err) {
         console.error("Fetch Error:", err.message);
+        // If batch not found, still try to set date from order_scheduling
+        if (itemsRes?.data && itemsRes.data.length > 0) {
+          setBatchDate(itemsRes.data[0].date_arrived);
+        }
       }
     };
 
@@ -81,7 +79,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
 
     try {
       const { error } = await supabase
-        .from("purchase_order_items")
+        .from("order_scheduling")
         .update({ [column]: currentValue + 1 })
         .eq("id", selectedItem.id);
 
@@ -186,7 +184,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
                         day: "numeric",
                         year: "numeric",
                       })
-                    : "No Date Found"}
+                    : "--"}
                 </span>
               </div>
             </div>

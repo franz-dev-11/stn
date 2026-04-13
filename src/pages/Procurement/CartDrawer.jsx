@@ -1,11 +1,20 @@
 import React from "react";
-import { X, Trash2, ShoppingCart } from "lucide-react";
+import { X, Trash2, ShoppingCart, Minus, Plus } from "lucide-react";
 
 const CartDrawer = ({ isOpen, onClose, cart, setCart, setView }) => {
   if (!isOpen) return null;
 
   const removeFromCart = (id) => {
     setCart((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updateQuantity = (id, newQty) => {
+    const qty = Math.max(1, parseInt(newQty) || 1);
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantity: qty } : item
+      )
+    );
   };
 
   return (
@@ -49,8 +58,29 @@ const CartDrawer = ({ isOpen, onClose, cart, setCart, setView }) => {
                       SKU: {item.sku}
                     </p>
                     <p className='text-sm font-black mt-1'>
-                      {item.quantity} x ₱{item.price.toLocaleString()}
+                      ₱{item.price.toLocaleString()}
                     </p>
+                    <div className='flex items-center gap-2 mt-2'>
+                      <button
+                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        className='text-slate-600 hover:text-slate-900 p-1'
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <input
+                        type='number'
+                        min='1'
+                        value={item.quantity}
+                        onChange={(e) => updateQuantity(item.id, e.target.value)}
+                        className='font-black text-xs w-16 text-center border border-slate-200 rounded px-2 outline-none focus:border-teal-500'
+                      />
+                      <button
+                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        className='text-slate-600 hover:text-slate-900 p-1'
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
                   </div>
                   <button
                     onClick={() => removeFromCart(item.id)}
