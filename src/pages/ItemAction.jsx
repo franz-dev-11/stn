@@ -104,21 +104,31 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
       {/* Print-specific Styles */}
       <style>
         {`
+          @page { size: A6 portrait; margin: 0; }
           @media print {
-            body { background: white !important; }
+            body { background: white !important; margin: 0 !important; }
+            body * { visibility: hidden !important; }
+            .print-area, .print-area * { visibility: visible !important; }
             .no-print { display: none !important; }
-            .print-area { 
-              border: none !important; 
-              box-shadow: none !important; 
-              margin: 0 !important;
-              padding: 0 !important;
-              width: 100% !important;
+            .print-area {
+              position: fixed !important;
+              left: 0 !important; top: 0 !important;
+              width: 105mm !important; height: 148mm !important;
+              border: none !important; box-shadow: none !important;
+              margin: 0 !important; padding: 0 !important;
+              border-radius: 0 !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
             }
             .printable-card {
-              border: 1px solid #e2e8f0 !important;
-              padding: 40px !important;
-              border-radius: 20px !important;
+              display: flex !important;
+              flex-direction: column !important;
+              align-items: center !important;
+              justify-content: center !important;
               text-align: center !important;
+              width: 105mm !important;
+              height: 148mm !important;
             }
           }
         `}
@@ -244,49 +254,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
                 </p>
               </div>
 
-              <div className='grid grid-cols-2 gap-4 mb-8'>
-                <div className='bg-slate-50 p-4 rounded-2xl text-center'>
-                  <p className='text-[9px] font-black text-slate-400 uppercase'>
-                    Original Stock
-                  </p>
-                  <p className='text-lg font-black'>{selectedItem.quantity}</p>
-                </div>
-                <div className='bg-slate-50 p-4 rounded-2xl text-center'>
-                  <p className='text-[9px] font-black text-slate-400 uppercase'>
-                    Today's In/Out
-                  </p>
-                  <p className='text-lg font-black text-teal-600'>
-                    +{selectedItem.inbound_qty || 0} / -
-                    {selectedItem.outbound_qty || 0}
-                  </p>
-                </div>
-              </div>
 
-              <div className='grid grid-cols-2 gap-4'>
-                <button
-                  disabled={processing}
-                  onClick={() => handleTransaction("in")}
-                  className='bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-all shadow-lg shadow-emerald-100'
-                >
-                  Inbound
-                </button>
-                <button
-                  disabled={processing}
-                  onClick={() => handleTransaction("out")}
-                  className='bg-rose-500 hover:bg-rose-600 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-all shadow-lg shadow-rose-100'
-                >
-                  Outbound
-                </button>
-              </div>
-
-              {items.length > 1 && (
-                <button
-                  onClick={() => setSelectedItem(null)}
-                  className='w-full mt-6 text-[10px] font-black text-slate-400 uppercase hover:text-teal-600 transition-colors'
-                >
-                  ← Switch to another item
-                </button>
-              )}
             </div>
           )}
         </div>
