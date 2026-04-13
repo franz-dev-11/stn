@@ -349,36 +349,43 @@ const Dashboard = () => {
   }, [filteredHistory, filteredSales]);
 
   const inventorySegments = useMemo(
-    () => [
-      {
-        name: "Healthy",
-        value: filteredInventoryItems.filter(
-          (item) =>
-            safeNumber(item.availableStock) > safeNumber(item.min_stock_level),
-        ).length,
-      },
-      {
-        name: "Low Stock",
-        value: filteredInventoryItems.filter(
-          (item) =>
-            safeNumber(item.availableStock) > 0 &&
-            safeNumber(item.availableStock) <= safeNumber(item.min_stock_level),
-        ).length,
-      },
-      {
-        name: "Out of Stock",
-        value: filteredInventoryItems.filter(
-          (item) => safeNumber(item.availableStock) <= 0,
-        ).length,
-      },
-      {
-        name: "No Movement",
-        value: filteredInventoryItems.filter((item) => {
-          const key = item.sku || item.name;
-          return safeNumber(dailyDemandByItem[key]) === 0;
-        }).length,
-      },
-    ],
+    () => {
+      const items = filteredInventoryItems;
+      return [
+        {
+          name: "Healthy",
+          value: items.filter(
+            (item) =>
+              safeNumber(item.availableStock) > safeNumber(item.min_stock_level),
+          ).length,
+          items: items.filter(i => safeNumber(i.availableStock) > safeNumber(i.min_stock_level)),
+        },
+        {
+          name: "Low Stock",
+          value: items.filter(
+            (item) =>
+              safeNumber(item.availableStock) > 0 &&
+              safeNumber(item.availableStock) <= safeNumber(item.min_stock_level),
+          ).length,
+          items: items.filter(i => safeNumber(i.availableStock) > 0 && safeNumber(i.availableStock) <= safeNumber(i.min_stock_level)),
+        },
+        {
+          name: "Out of Stock",
+          value: items.filter(
+            (item) => safeNumber(item.availableStock) <= 0,
+          ).length,
+          items: items.filter(i => safeNumber(i.availableStock) <= 0),
+        },
+        {
+          name: "No Movement",
+          value: items.filter((item) => {
+            const key = item.sku || item.name;
+            return safeNumber(dailyDemandByItem[key]) === 0;
+          }).length,
+          items: items.filter(i => safeNumber(dailyDemandByItem[i.sku || i.name]) === 0),
+        },
+      ];
+    },
     [filteredInventoryItems, dailyDemandByItem],
   );
 
@@ -1064,7 +1071,7 @@ const Dashboard = () => {
         </div>
 
         <div className='bg-white p-6 rounded-3xl shadow-sm'>
-          <h3 className='font-black text-slate-800 uppercase text-xs mb-6 flex items-center gap-2'>
+          <h3 className='font-black text-slate-800 uppercase text-xs mb-4 flex items-center gap-2'>
             <Boxes size={16} /> Inventory Health Mix
           </h3>
           <div className='h-64 w-full'>
@@ -1095,16 +1102,11 @@ const Dashboard = () => {
 
           <div className='mt-2 space-y-2'>
             {inventorySegments.map((segment, index) => (
-              <div
-                key={segment.name}
-                className='flex items-center justify-between text-[11px] font-bold uppercase'
-              >
+              <div key={segment.name} className='flex items-center justify-between text-[11px] font-bold uppercase'>
                 <div className='flex items-center gap-2'>
                   <span
-                    className='h-2.5 w-2.5 rounded-full'
-                    style={{
-                      backgroundColor: PIE_COLORS[index % PIE_COLORS.length],
-                    }}
+                    className='h-2.5 w-2.5 rounded-full shrink-0'
+                    style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
                   />
                   <span className='text-slate-500'>{segment.name}</span>
                 </div>
@@ -1112,6 +1114,33 @@ const Dashboard = () => {
               </div>
             ))}
           </div>
+
+          <details className='group mt-3'>
+            <summary className='list-none cursor-pointer flex items-center justify-between text-[10px] font-black uppercase text-teal-600 py-1.5 border-t border-slate-100'>
+              <span>View All Items</span>
+              <span className='text-slate-300 group-open:rotate-180 transition-transform'>▼</span>
+            </summary>
+            <div className='mt-2 max-h-56 overflow-y-auto space-y-1 pr-1'>
+              {inventorySegments.map((segment, index) =>
+                segment.items?.length > 0 && (
+                  <div key={segment.name}>
+                    <div
+                      className='text-[9px] font-black uppercase tracking-widest py-0.5 px-1 rounded mb-0.5'
+                      style={{ color: PIE_COLORS[index % PIE_COLORS.length], backgroundColor: PIE_COLORS[index % PIE_COLORS.length] + '18' }}
+                    >
+                      {segment.name}
+                    </div>
+                    {segment.items.map(item => (
+                      <div key={item.id} className='flex justify-between text-[10px] font-bold text-slate-500 py-0.5 pl-2 border-b border-slate-50'>
+                        <span className='uppercase truncate max-w-30'>{item.name}</span>
+                        <span className='text-slate-400 shrink-0 ml-2'>{safeNumber(item.availableStock)} {item.unit || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </details>
         </div>
       </div>
 
