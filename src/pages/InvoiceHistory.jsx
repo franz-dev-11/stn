@@ -249,53 +249,64 @@ const InvoiceHistory = () => {
                                   <div className='flex justify-between items-start pb-4 mb-6 border-b-2 border-slate-200'>
                                     <div>
                                       <h1 className='text-4xl font-black uppercase italic leading-none'>
-                                        Sales Invoice
+                                        Sales Receipt
                                       </h1>
                                       <p className='text-xs font-bold text-slate-600 mt-2'>
-                                        Ref Order: {inv.so_number}
+                                        {inv.sales_items?.length} Item{inv.sales_items?.length !== 1 ? 's' : ''}
                                       </p>
                                     </div>
                                     <div className='text-right'>
                                       <p className='text-sm font-black uppercase'>
                                         Date:{" "}
-                                        {new Date(
-                                          inv.created_at,
-                                        ).toLocaleDateString()}
+                                        {new Date(inv.created_at).toLocaleDateString()}
                                       </p>
                                       <p className='text-[10px] font-bold text-slate-600 uppercase'>
-                                        Transaction Record
+                                        Receipt Summary
                                       </p>
                                     </div>
                                   </div>
-                                  <div className='mb-8'>
-                                    <h4 className='text-[10px] font-black text-slate-600 uppercase mb-1'>
-                                      Billed To:
-                                    </h4>
-                                    <p className='text-sm font-black uppercase'>
-                                      {inv.customer_name}
-                                    </p>
+                                  <div className='grid grid-cols-2 gap-8 mb-8'>
+                                    <div>
+                                      <h4 className='text-[10px] font-black text-slate-600 uppercase mb-1'>
+                                        Billed To:
+                                      </h4>
+                                      <p className='text-sm font-black uppercase'>
+                                        {inv.customer_name}
+                                      </p>
+                                      <p className='text-xs font-medium text-slate-600 uppercase mt-0.5'>
+                                        {inv.transaction_type || 'Walk-in'}
+                                      </p>
+                                    </div>
+                                    <div className='text-right'>
+                                      <h4 className='text-[10px] font-black text-slate-600 uppercase mb-1'>
+                                        Issued By:
+                                      </h4>
+                                      <p className='text-sm font-black uppercase'>
+                                        JohnCel Trading
+                                      </p>
+                                      <p className='text-xs font-medium text-slate-600'>
+                                        254 Dir. A. Bunye, Bagumbayan
+                                      </p>
+                                      <p className='text-xs font-medium text-slate-600'>
+                                        Taguig, 1630 Kalakhang Maynila
+                                      </p>
+                                      <p className='text-[10px] font-bold text-slate-500 mt-1'>
+                                        Ref: {inv.so_number}
+                                      </p>
+                                    </div>
                                   </div>
                                   <table className='w-full text-left mb-6'>
                                     <thead>
                                       <tr className='bg-black text-white text-[10px] uppercase font-black'>
                                         <th className='py-3'>Description</th>
-                                        <th className='py-3 text-center'>
-                                          Qty
-                                        </th>
-                                        <th className='py-3 text-right'>
-                                          Unit Price
-                                        </th>
-                                        <th className='py-3 text-right'>
-                                          Subtotal
-                                        </th>
+                                        <th className='py-3 text-center'>Qty</th>
+                                        <th className='py-3 text-right'>Unit Price</th>
+                                        <th className='py-3 text-right'>Subtotal</th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {inv.sales_items?.map((item) => (
-                                        <tr
-                                          key={item.id}
-                                          className='border-b border-slate-100'
-                                        >
+                                        <tr key={item.id} className='border-b border-slate-100'>
                                           <td className='py-4 text-sm font-black uppercase'>
                                             {item.item_name}
                                           </td>
@@ -306,10 +317,7 @@ const InvoiceHistory = () => {
                                             ₱{item.unit_price?.toLocaleString()}
                                           </td>
                                           <td className='py-4 text-right text-sm font-black'>
-                                            ₱
-                                            {(
-                                              item.quantity * item.unit_price
-                                            ).toLocaleString()}
+                                            ₱{(item.quantity * item.unit_price).toLocaleString()}
                                           </td>
                                         </tr>
                                       ))}
