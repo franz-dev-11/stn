@@ -7,6 +7,7 @@ const BatchRecord = () => {
   const { batchRef } = useParams();
   const [items, setItems] = useState([]);
   const [batchDate, setBatchDate] = useState(null);
+  const [currentStock, setCurrentStock] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -42,6 +43,10 @@ const BatchRecord = () => {
           setBatchDate(batchRes.data.batch_date);
         } else if (fetchedItems.length > 0) {
           setBatchDate(fetchedItems[0].date_arrived);
+        }
+
+        if (batchRes.data?.current_stock != null) {
+          setCurrentStock(batchRes.data.current_stock);
         }
 
         if (fetchedItems.length === 0) {
@@ -151,6 +156,21 @@ const BatchRecord = () => {
               </p>
             </div>
           </div>
+
+          {/* Stock Quantity */}
+          {currentStock != null && (
+            <div className="flex items-start gap-3">
+              <Package size={16} className="text-teal-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                  Stock Quantity
+                </p>
+                <p className="text-sm font-black text-emerald-600 uppercase mt-0.5">
+                  {currentStock}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="px-8 pb-6 text-center">
