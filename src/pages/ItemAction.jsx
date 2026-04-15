@@ -16,7 +16,11 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
   const [processing, setProcessing] = useState(false);
   const [status, setStatus] = useState(null);
   const [batchDate, setBatchDate] = useState(null);
-  const [currentStock, setCurrentStock] = useState(null);
+  const [currentStock, setCurrentStock] = useState(
+    typeof po_number === "object" && po_number !== null && po_number.stock != null
+      ? po_number.stock
+      : null,
+  );
   const [productName, setProductName] = useState(""); // State for joined product name
 
   const isObject = typeof po_number === "object" && po_number !== null;
@@ -56,7 +60,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
           .from("inventory_batches")
           .select("batch_date, current_stock")
           .eq("batch_number", batchRef)
-          .single();
+          .maybeSingle();
 
         const [itemsRes, batchRes] = await Promise.all([
           itemsRequest,

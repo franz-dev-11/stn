@@ -374,7 +374,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                             ></div>
                           </td>
                           <td className='px-8 py-6 font-mono font-black text-slate-800 text-base'>
-                            {batch.batch_number}
+                            {batch.batch_number?.split("-").slice(0, 2).join("-")}
                           </td>
                           <td className='px-8 py-6 text-center font-bold text-slate-700 text-sm'>
                             {new Date(batch.batch_date).toLocaleDateString(
@@ -399,6 +399,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                                   number: batch.batch_number,
                                   date: batch.batch_date,
                                   name: itemName,
+                                  stock: batch.current_stock,
                                 });
                                 setCurrentPage("Item Action");
                               }}

@@ -150,7 +150,19 @@ const RecordSales = () => {
     if (cart.length === 0) return;
     setIsCompleting(true);
     try {
-      const soNum = `SO-${Math.floor(100000 + Math.random() * 900000)}`;
+      const year = new Date().getFullYear();
+      const prefix = `SO-${year}`;
+      const { data: latestSO } = await supabase
+        .from("sales_transactions")
+        .select("so_number")
+        .like("so_number", `${prefix}%`)
+        .order("so_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const lastSeq = latestSO?.so_number
+        ? parseInt(latestSO.so_number.replace(prefix, ""), 10) || 0
+        : 0;
+      const soNum = `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
       const totalAmount = cart.reduce(
         (sum, i) => sum + i.displayPrice * i.quantity,
         0,
