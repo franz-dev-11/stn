@@ -548,83 +548,117 @@ const RecordSales = () => {
 };
 
 const InvoiceView = ({ order, onBack }) => (
-  <div className='p-8 bg-slate-50 min-h-screen font-sans flex items-center justify-center'>
-    <div className='max-w-xl w-full'>
+  <div className='p-8 bg-slate-50 min-h-screen font-sans'>
+    <div className='max-w-3xl mx-auto'>
       <button
         onClick={onBack}
         className='mb-6 flex items-center gap-2 font-black uppercase text-[10px] text-slate-400 hover:text-black no-print'
       >
         <ChevronLeft size={16} /> New Transaction
       </button>
-      <div
-        id='print-receipt'
-        className='bg-white p-12 rounded-[3rem] shadow-xl'
-      >
-        <h1 className='text-3xl font-black uppercase italic tracking-tighter mb-8 text-black'>
-          Sales Receipt
-        </h1>
-        <div className='space-y-4 mb-10'>
-          <div className='flex justify-between'>
-            <span className='text-[10px] font-black text-slate-400 uppercase'>
-              Customer
-            </span>
-            <span className='font-bold uppercase text-xs text-black'>
-              {order.customerName}
-            </span>
+
+      {/* Toolbar */}
+      <div className='bg-black text-white px-8 py-4 flex justify-between items-center rounded-t-2xl no-print'>
+        <h2 className='font-black uppercase tracking-widest text-sm flex items-center gap-2'>
+          <CheckCircle size={16} className='text-teal-400' /> Transaction Complete
+        </h2>
+        <button
+          onClick={() => window.print()}
+          className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'
+        >
+          <Printer size={14} /> Print Receipt
+        </button>
+      </div>
+
+      {/* Receipt Content */}
+      <div id='print-receipt' className='bg-white p-8 rounded-b-2xl shadow-sm'>
+        {/* Header */}
+        <div className='flex justify-between items-start pb-4 mb-6 border-b-2 border-slate-200'>
+          <div>
+            <h1 className='text-4xl font-black uppercase italic leading-none'>
+              Sales Receipt
+            </h1>
+            <p className='text-xs font-bold text-slate-600 mt-2'>
+              {order.items.length} Item{order.items.length !== 1 ? 's' : ''}
+            </p>
           </div>
-          <div className='flex justify-between'>
-            <span className='text-[10px] font-black text-slate-400 uppercase'>
-              Transaction Type
-            </span>
-            <span className='font-bold uppercase text-xs text-black'>
-              {order.transactionType}
-            </span>
-          </div>
-          <div className='flex justify-between'>
-            <span className='text-[10px] font-black text-slate-400 uppercase'>
-              SO #
-            </span>
-            <span className='font-mono font-bold text-teal-600 uppercase text-xs'>
-              {order.soNum}
-            </span>
+          <div className='text-right'>
+            <p className='text-sm font-black uppercase'>
+              Date: {order.date}
+            </p>
+            <p className='text-[10px] font-bold text-slate-600 uppercase'>
+              Receipt Summary
+            </p>
           </div>
         </div>
-        <table className='w-full mb-10'>
-          <tbody className='divide-y divide-slate-50'>
+
+        {/* Two-column info */}
+        <div className='grid grid-cols-2 gap-8 mb-8'>
+          <div>
+            <h4 className='text-[10px] font-black text-slate-600 uppercase mb-1'>
+              Billed To:
+            </h4>
+            <p className='text-sm font-black uppercase'>{order.customerName}</p>
+            <p className='text-xs font-medium text-slate-600 uppercase mt-0.5'>
+              {order.transactionType}
+            </p>
+            <p className='text-[10px] font-bold text-slate-500 mt-1'>
+              Ref: {order.soNum}
+            </p>
+          </div>
+          <div className='text-right'>
+            <h4 className='text-[10px] font-black text-slate-600 uppercase mb-1'>
+              Issued By:
+            </h4>
+            <p className='text-sm font-black uppercase'>JohnCel Trading</p>
+            <p className='text-xs font-medium text-slate-600'>
+              254 Dir. A. Bunye, Bagumbayan
+            </p>
+            <p className='text-xs font-medium text-slate-600'>
+              Taguig, 1630 Kalakhang Maynila
+            </p>
+          </div>
+        </div>
+
+        {/* Items Table */}
+        <table className='w-full text-left mb-6'>
+          <thead>
+            <tr className='bg-black text-white text-[10px] uppercase font-black'>
+              <th className='py-3 px-2'>Description</th>
+              <th className='py-3 px-2'>Batch</th>
+              <th className='py-3 px-2 text-center'>Qty</th>
+              <th className='py-3 px-2 text-right'>Unit Price</th>
+              <th className='py-3 px-2 text-right'>Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
             {order.items.map((i, idx) => (
-              <tr key={idx}>
-                <td className='py-4'>
-                  <p className='font-black text-xs uppercase text-slate-800'>
-                    {i.name}
-                  </p>
-                  <p className='text-[9px] font-bold text-teal-500 uppercase tracking-tight'>
-                    Batch: {i.activeBatch.batch_number}
-                  </p>
+              <tr key={idx} className='border-b border-slate-100'>
+                <td className='py-4 px-2 text-sm font-black uppercase'>{i.name}</td>
+                <td className='py-4 px-2 text-[10px] font-mono font-bold text-teal-600'>
+                  {i.activeBatch.batch_number?.split('-').slice(0, 2).join('-')}
                 </td>
-                <td className='py-4 text-center font-bold text-slate-600 text-xs'>
-                  {i.quantity}
+                <td className='py-4 px-2 text-center font-black'>{i.quantity}</td>
+                <td className='py-4 px-2 text-right text-sm font-bold'>
+                  ₱{i.displayPrice?.toLocaleString()}
                 </td>
-                <td className='py-4 text-right font-black text-slate-800 text-sm'>
+                <td className='py-4 px-2 text-right text-sm font-black'>
                   ₱{(i.displayPrice * i.quantity).toLocaleString()}
                 </td>
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className='border-t-2 border-slate-200'>
+              <td colSpan='4' className='py-6 text-right text-sm font-black uppercase text-slate-600'>
+                Grand Total:
+              </td>
+              <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>
+                ₱{order.totalAmount.toLocaleString()}
+              </td>
+            </tr>
+          </tfoot>
         </table>
-        <div className='pt-8 flex flex-col items-end'>
-          <p className='text-[10px] font-black text-slate-400 uppercase mb-1'>
-            Total Paid
-          </p>
-          <p className='text-5xl font-black italic text-teal-600'>
-            ₱{order.totalAmount.toLocaleString()}
-          </p>
-        </div>
-        <button
-          onClick={() => window.print()}
-          className='mt-10 w-full flex items-center justify-center gap-2 py-4 bg-slate-50 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:text-black no-print transition-all'
-        >
-          <Printer size={16} /> Print Receipt
-        </button>
       </div>
     </div>
   </div>
