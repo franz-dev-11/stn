@@ -76,6 +76,19 @@ export const usePurchasing = () => {
     setIsCompleting(true);
     try {
       const now = new Date().toISOString();
+      const year = new Date().getFullYear();
+      const poPrefix = `PO-${year}`;
+      const { data: latestPO } = await supabase
+        .from("purchase_orders")
+        .select("po_number")
+        .like("po_number", `${poPrefix}%`)
+        .order("po_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let poSeq = latestPO?.po_number
+        ? parseInt(latestPO.po_number.replace(poPrefix, ""), 10) || 0
+        : 0;
+
       const grouped = cart.reduce((acc, item) => {
         if (!acc[item.supplier]) acc[item.supplier] = [];
         acc[item.supplier].push(item);
@@ -83,7 +96,8 @@ export const usePurchasing = () => {
       }, {});
 
       for (const [supplierName, products] of Object.entries(grouped)) {
-        const poNum = `PO-${Math.floor(100000 + Math.random() * 900000)}`;
+        poSeq += 1;
+        const poNum = `${poPrefix}${String(poSeq).padStart(4, "0")}`;
         const total = products.reduce((s, p) => s + p.price * p.quantity, 0);
 
         const { error: poErr } = await supabase.from("purchase_orders").insert([
