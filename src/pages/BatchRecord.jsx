@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
-import { Package, Calendar, Layers, CheckCircle } from "lucide-react";
+import { Package, Calendar, Layers } from "lucide-react";
 
 const BatchRecord = () => {
   const { batchRef } = useParams();
@@ -129,36 +129,16 @@ const BatchRecord = () => {
             </div>
           </div>
 
-          {/* Items */}
+          {/* Item Name */}
           <div className="flex items-start gap-3">
             <Layers size={16} className="text-teal-500 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">
-                Items ({items.length})
+            <div>
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                Item Name
               </p>
-              <div className="space-y-2">
-                {items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between items-center bg-slate-50 rounded-xl px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-xs font-black uppercase text-slate-800">
-                        {item.item_name}
-                      </p>
-                      {item.date_arrived && (
-                        <p className="text-[9px] font-bold text-slate-400 uppercase">
-                          Arrived: {formatDate(item.date_arrived)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <CheckCircle size={12} className="text-teal-500" />
-                      <span className="text-xs font-black text-slate-700">{item.quantity}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <p className="text-sm font-black text-slate-800 uppercase mt-0.5">
+                {items[0]?.item_name || "—"}
+              </p>
             </div>
           </div>
         </div>

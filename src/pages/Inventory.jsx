@@ -18,15 +18,10 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
   const [currentTime, setCurrentTime] = useState(
     new Date().toLocaleTimeString(),
   );
-  const [ledgerSearch, setLedgerSearch] = useState("");
-  const [ledgerCategory, setLedgerCategory] = useState("");
-  const [batchSearch, setBatchSearch] = useState("");
-  const [batchCategory, setBatchCategory] = useState("");
-  const [batchDateFrom, setBatchDateFrom] = useState("");
-  const [batchDateTo, setBatchDateTo] = useState("");
-  const [archiveSearch, setArchiveSearch] = useState("");
-  const [archiveDateFrom, setArchiveDateFrom] = useState("");
-  const [archiveDateTo, setArchiveDateTo] = useState("");
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     fetchInventory();
@@ -96,26 +91,26 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
 
   const filteredLedgerEntries = Object.entries(groupedByName).filter(([name, itemBatches]) => {
     const master = itemBatches[0].hardware_inventory;
-    const matchName = name.toLowerCase().includes(ledgerSearch.toLowerCase());
-    const matchCat = !ledgerCategory || master?.category === ledgerCategory;
+    const matchName = name.toLowerCase().includes(search.toLowerCase());
+    const matchCat = !category || master?.category === category;
     return matchName && matchCat;
   });
 
   const filteredBatchEntries = Object.entries(groupedByName).filter(([name, itemBatches]) => {
     const master = itemBatches[0].hardware_inventory;
-    const matchName = name.toLowerCase().includes(batchSearch.toLowerCase());
-    const matchCat = !batchCategory || master?.category === batchCategory;
+    const matchName = name.toLowerCase().includes(search.toLowerCase());
+    const matchCat = !category || master?.category === category;
     const batchDates = itemBatches.map(b => b.batch_date?.split('T')[0] || '');
-    const matchDate = (!batchDateFrom && !batchDateTo) || batchDates.some(d =>
-      (!batchDateFrom || d >= batchDateFrom) && (!batchDateTo || d <= batchDateTo)
+    const matchDate = (!dateFrom && !dateTo) || batchDates.some(d =>
+      (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)
     );
     return matchName && matchCat && matchDate;
   });
 
   const filteredArchiveItems = archiveItems.filter((r) => {
-    const matchName = r.name?.toLowerCase().includes(archiveSearch.toLowerCase());
+    const matchName = r.name?.toLowerCase().includes(search.toLowerCase());
     const d = r.snapshot_date?.split('T')[0] || '';
-    const matchDate = (!archiveDateFrom || d >= archiveDateFrom) && (!archiveDateTo || d <= archiveDateTo);
+    const matchDate = (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
     return matchName && matchDate;
   });
 
@@ -194,32 +189,46 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
         </div>
       </div>
 
+      {/* UNIVERSAL FILTER BAR */}
+      <div className='flex flex-col sm:flex-row gap-3 mb-8 no-print'>
+        <div className='relative flex-1'>
+          <Search className='absolute left-4 top-1/2 -translate-y-1/2 text-slate-400' size={16} />
+          <input
+            type='text'
+            placeholder='Search items, batches, history...'
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className='w-full pl-10 pr-4 py-3 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400'
+          />
+        </div>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400 min-w-[160px]'
+        >
+          <option value=''>All Categories</option>
+          {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input
+          type='date'
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400'
+        />
+        <input
+          type='date'
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400'
+        />
+      </div>
+
       {/* 1. DAILY MOVEMENT LEDGER */}
       <div className='mb-8 sm:mb-14'>
         <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
           <ArrowDownUp className='text-teal-600' size={24} /> Daily Movement
           Ledger
         </h2>
-        <div className='flex flex-col sm:flex-row gap-3 mb-4'>
-          <div className='relative flex-1'>
-            <Search className='absolute left-4 top-1/2 -translate-y-1/2 text-slate-400' size={16} />
-            <input
-              type='text'
-              placeholder='Search items...'
-              value={ledgerSearch}
-              onChange={(e) => setLedgerSearch(e.target.value)}
-              className='w-full pl-10 pr-4 py-3 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400'
-            />
-          </div>
-          <select
-            value={ledgerCategory}
-            onChange={(e) => setLedgerCategory(e.target.value)}
-            className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400 min-w-[160px]'
-          >
-            <option value=''>All Categories</option>
-            {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
         <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
@@ -304,38 +313,6 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
         <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
           <Package className='text-teal-600' size={24} /> Master Batch Records
         </h2>
-        <div className='flex flex-col sm:flex-row gap-3 mb-4'>
-          <div className='relative flex-1'>
-            <Search className='absolute left-4 top-1/2 -translate-y-1/2 text-slate-400' size={16} />
-            <input
-              type='text'
-              placeholder='Search batches...'
-              value={batchSearch}
-              onChange={(e) => setBatchSearch(e.target.value)}
-              className='w-full pl-10 pr-4 py-3 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400'
-            />
-          </div>
-          <select
-            value={batchCategory}
-            onChange={(e) => setBatchCategory(e.target.value)}
-            className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400 min-w-[160px]'
-          >
-            <option value=''>All Categories</option>
-            {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <input
-            type='date'
-            value={batchDateFrom}
-            onChange={(e) => setBatchDateFrom(e.target.value)}
-            className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400'
-          />
-          <input
-            type='date'
-            value={batchDateTo}
-            onChange={(e) => setBatchDateTo(e.target.value)}
-            className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400'
-          />
-        </div>
         <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
@@ -456,30 +433,6 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
           <Clock size={24} className='text-slate-400' /> Ledger History (EOD
           Snapshots)
         </h2>
-        <div className='flex flex-col sm:flex-row gap-3 mb-4'>
-          <div className='relative flex-1'>
-            <Search className='absolute left-4 top-1/2 -translate-y-1/2 text-slate-400' size={16} />
-            <input
-              type='text'
-              placeholder='Search history...'
-              value={archiveSearch}
-              onChange={(e) => setArchiveSearch(e.target.value)}
-              className='w-full pl-10 pr-4 py-3 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400'
-            />
-          </div>
-          <input
-            type='date'
-            value={archiveDateFrom}
-            onChange={(e) => setArchiveDateFrom(e.target.value)}
-            className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400'
-          />
-          <input
-            type='date'
-            value={archiveDateTo}
-            onChange={(e) => setArchiveDateTo(e.target.value)}
-            className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400'
-          />
-        </div>
         <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>

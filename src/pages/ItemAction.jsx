@@ -16,6 +16,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
   const [processing, setProcessing] = useState(false);
   const [status, setStatus] = useState(null);
   const [batchDate, setBatchDate] = useState(null);
+  const [currentStock, setCurrentStock] = useState(null);
   const [productName, setProductName] = useState(""); // State for joined product name
 
   const isObject = typeof po_number === "object" && po_number !== null;
@@ -37,7 +38,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
         // 2. Try to get receipt date from inventory_batches
         const batchRequest = supabase
           .from("inventory_batches")
-          .select("batch_date")
+          .select("batch_date, current_stock")
           .eq("batch_number", batchRef)
           .single();
 
@@ -58,6 +59,9 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
           setBatchDate(batchRes.data.batch_date);
         } else if (itemsRes.data && itemsRes.data.length > 0) {
           setBatchDate(itemsRes.data[0].date_arrived);
+        }
+        if (batchRes.data?.current_stock != null) {
+          setCurrentStock(batchRes.data.current_stock);
         }
       } catch (err) {
         console.error("Fetch Error:", err.message);
@@ -246,6 +250,12 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
                 <p className='font-black text-white uppercase text-lg leading-tight'>
                   {selectedItem.item_name}
                 </p>
+                {currentStock != null && (
+                  <div className='mt-3 flex items-center gap-2'>
+                    <span className='text-[10px] font-black text-slate-400 uppercase tracking-widest'>Stock Qty:</span>
+                    <span className='text-sm font-black text-emerald-400'>{currentStock}</span>
+                  </div>
+                )}
               </div>
 
 
