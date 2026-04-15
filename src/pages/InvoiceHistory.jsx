@@ -163,6 +163,7 @@ const InvoiceHistory = () => {
                   <th className='px-6 py-4'>Date</th>
                   <th className='px-6 py-4'>Order #</th>
                   <th className='px-6 py-4'>Customer</th>
+                  <th className='px-6 py-4'>Type</th>
                   <th className='px-6 py-4'>Status</th>
                   <th className='px-6 py-4 text-center'>Items</th>
                   <th className='px-6 py-4 text-right'>Total Amount</th>
@@ -193,6 +194,11 @@ const InvoiceHistory = () => {
                             {inv.customer_name}
                           </td>
                           <td className='px-6 py-4'>
+                            <span className='text-[10px] font-black px-2 py-1 rounded-lg uppercase bg-slate-100 text-slate-700'>
+                              {inv.transaction_type || 'walk-in'}
+                            </span>
+                          </td>
+                          <td className='px-6 py-4'>
                             <span
                               className={`text-[10px] font-black px-3 py-1 rounded-lg ${
                                 inv.status === "Completed"
@@ -221,7 +227,7 @@ const InvoiceHistory = () => {
                         </tr>
                         {isExpanded && (
                           <tr>
-                            <td colSpan='7' className='p-0 bg-slate-50'>
+                            <td colSpan='8' className='p-0 bg-slate-50'>
                               <div className='print-area'>
                                 {/* Toolbar */}
                                 <div className='bg-black text-white px-8 py-4 flex justify-between items-center no-print'>

@@ -85,6 +85,8 @@ const PurchaseHistory = () => {
           id: key,
           supplier,
           date_ordered: batch.date_ordered,
+          order_number: batch.order_number || "—",
+          status: batch.status || "—",
           items: [],
           totalAmount: 0,
         };
@@ -215,7 +217,9 @@ const PurchaseHistory = () => {
               <thead>
                 <tr className='bg-black text-white text-[10px] font-black uppercase'>
                   <th className='px-6 py-4'>Date</th>
+                  <th className='px-6 py-4'>Order #</th>
                   <th className='px-6 py-4'>Vendor</th>
+                  <th className='px-6 py-4'>Status</th>
                   <th className='px-6 py-4'>Items</th>
                   <th className='px-6 py-4 text-center'>Count</th>
                   <th className='px-6 py-4 text-right'>Total Amount</th>
@@ -240,8 +244,21 @@ const PurchaseHistory = () => {
                           <td className='px-6 py-4 text-[10px] font-bold text-slate-500 whitespace-nowrap'>
                             {new Date(receipt.date_ordered).toLocaleDateString()}
                           </td>
+                          <td className='px-6 py-4 font-mono font-black text-xs text-teal-700'>
+                            {receipt.order_number}
+                          </td>
                           <td className='px-6 py-4 font-black uppercase text-sm'>
                             {receipt.supplier || "N/A"}
+                          </td>
+                          <td className='px-6 py-4'>
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase ${
+                              receipt.status === "Arrived" ? "bg-emerald-100 text-emerald-700"
+                              : receipt.status === "In Transit" ? "bg-blue-100 text-blue-700"
+                              : receipt.status === "Pending" ? "bg-amber-100 text-amber-700"
+                              : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {receipt.status}
+                            </span>
                           </td>
                           <td className='px-6 py-4 text-xs max-w-[300px]'>
                             <div className='space-y-1'>
@@ -275,7 +292,7 @@ const PurchaseHistory = () => {
                         </tr>
                         {isExpanded && (
                           <tr>
-                            <td colSpan='6' className='p-0 bg-slate-50'>
+                            <td colSpan='8' className='p-0 bg-slate-50'>
                               <div className='print-area'>
                                 {/* Toolbar */}
                                 <div className='bg-black text-white px-8 py-4 flex justify-between items-center no-print'>
@@ -300,7 +317,7 @@ const PurchaseHistory = () => {
                                   <div className='flex justify-between items-start pb-4 mb-6 border-b-2 border-slate-200'>
                                     <div>
                                       <h1 className='text-4xl font-black uppercase italic leading-none'>
-                                        Goods Receipt
+                                        Quotation
                                       </h1>
                                       <p className='text-xs font-bold text-slate-600 mt-2'>
                                         {receipt.items.length} Item{receipt.items.length !== 1 ? 's' : ''}
