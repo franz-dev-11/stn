@@ -786,13 +786,17 @@ const Dashboard = () => {
     const start = new Date(today);
     start.setDate(today.getDate() - (windowDays - 1));
 
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
     const actualByDay = {};
     salesItems.forEach((row) => {
       if (row.product_id !== focusItem.id) return;
       const tx = row.sales_transactions;
-      if ((tx?.status || "") !== "Completed") return;
+      const txStatus = (tx?.status || "").toLowerCase();
+      if (txStatus === "cancelled") return;
       const txDate = toDate(tx?.created_at);
-      if (!txDate || txDate < start || txDate > today) return;
+      if (!txDate || txDate < start || txDate >= tomorrow) return;
 
       const key = txDate.toISOString().slice(0, 10);
       actualByDay[key] = (actualByDay[key] || 0) + safeNumber(row.quantity);

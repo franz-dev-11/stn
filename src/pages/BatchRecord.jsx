@@ -10,13 +10,23 @@ const BatchRecord = () => {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  // batch_number format is "${orderNumber}-${productId}" (UUID = 36 chars)
+  const uuidSuffixRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const hasUuidSuffix = batchRef && batchRef.length > 37 && uuidSuffixRegex.test(batchRef.slice(-36));
+  const orderNumber = hasUuidSuffix ? batchRef.slice(0, -37) : batchRef;
+  const productId = hasUuidSuffix ? batchRef.slice(-36) : null;
+
   useEffect(() => {
     const fetchBatch = async () => {
       try {
-        const itemsRes = await supabase
+        let itemsQuery = supabase
           .from("order_scheduling")
           .select("*")
-          .eq("order_number", batchRef);
+          .eq("order_number", orderNumber);
+        if (productId) {
+          itemsQuery = itemsQuery.eq("product_id", productId);
+        }
+        const itemsRes = await itemsQuery;
 
         const fetchedItems = itemsRes.data || [];
         setItems(fetchedItems);

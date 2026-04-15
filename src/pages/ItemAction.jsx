@@ -22,6 +22,18 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
   const isObject = typeof po_number === "object" && po_number !== null;
   const batchRef = isObject ? po_number.number : po_number;
 
+  // batch_number format is "${orderNumber}-${productId}" (UUID = 36 chars)
+  const uuidSuffixRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const hasUuidSuffix = batchRef && batchRef.length > 37 && uuidSuffixRegex.test(batchRef.slice(-36));
+  const orderNumber = hasUuidSuffix ? batchRef.slice(0, -37) : batchRef;
+  const productId = hasUuidSuffix ? batchRef.slice(-36) : null;
+
+  useEffect(() => {
+    if (isObject && po_number.name) {
+      setProductName(po_number.name);
+    }
+  }, [isObject, po_number]);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!batchRef) {
@@ -30,10 +42,14 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
 
       try {
         // 1. Fetch Items in this PO from order_scheduling
-        const itemsRequest = supabase
+        //    Filter to the specific product if productId is present
+        let itemsRequest = supabase
           .from("order_scheduling")
           .select("*")
-          .eq("order_number", batchRef);
+          .eq("order_number", orderNumber);
+        if (productId) {
+          itemsRequest = itemsRequest.eq("product_id", productId);
+        }
 
         // 2. Try to get receipt date from inventory_batches
         const batchRequest = supabase
