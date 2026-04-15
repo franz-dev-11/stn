@@ -260,7 +260,7 @@ const PurchaseHistory = () => {
                               {receipt.status}
                             </span>
                           </td>
-                          <td className='px-6 py-4 text-xs max-w-[300px]'>
+                          <td className='px-6 py-4 text-xs max-w-75'>
                             <div className='space-y-1'>
                               {receipt.items.slice(0, 2).map((item, idx) => (
                                 <div key={idx} className='text-[10px] font-bold text-slate-700'>
@@ -301,6 +301,15 @@ const PurchaseHistory = () => {
                                     {receipt.supplier}
                                   </h2>
                                   <div className='flex gap-2'>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleGmailSend(receipt);
+                                      }}
+                                      className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'
+                                    >
+                                      <Mail size={14} /> Email Vendor
+                                    </button>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
