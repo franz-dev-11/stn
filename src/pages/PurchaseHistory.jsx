@@ -12,6 +12,7 @@ import {
   PackageCheck,
   Tag,
   Mail,
+  CheckCircle2,
 } from "lucide-react";
 
 const PurchaseHistory = () => {
@@ -77,8 +78,7 @@ const PurchaseHistory = () => {
     const grouped = {};
     filteredBatches.forEach((batch) => {
       const supplier = batch.hardware_inventory?.supplier || "Unknown Supplier";
-      const dateKey = new Date(batch.date_ordered).toISOString().split("T")[0];
-      const key = `${supplier}|${dateKey}`;
+      const key = batch.order_number || `${supplier}|${new Date(batch.date_ordered).toISOString().split("T")[0]}`;
 
       if (!grouped[key]) {
         grouped[key] = {
@@ -102,6 +102,32 @@ const PurchaseHistory = () => {
     currentPage * itemsPerPage,
   );
   const totalPages = Math.ceil(groupedReceipts.length / itemsPerPage);
+
+  const handleMarkReceived = async (e, receipt) => {
+    e.stopPropagation();
+    if (!window.confirm(`Mark "${receipt.order_number}" as Received?`)) return;
+    try {
+      const { error } = await supabase
+        .from("purchase_orders")
+        .update({ status: "Received" })
+        .eq("po_number", receipt.order_number);
+      if (error) throw error;
+      // Also update order_scheduling rows
+      await supabase
+        .from("order_scheduling")
+        .update({ status: "Received" })
+        .eq("order_number", receipt.order_number);
+      setBatches((prev) =>
+        prev.map((b) =>
+          b.order_number === receipt.order_number
+            ? { ...b, status: "Received" }
+            : b,
+        ),
+      );
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
 
   const handleGmailSend = (receiptGroup) => {
     const vendor = suppliers.find(
@@ -301,6 +327,14 @@ const PurchaseHistory = () => {
                                     {receipt.supplier}
                                   </h2>
                                   <div className='flex gap-2'>
+                                    {receipt.status !== "Received" && receipt.status !== "Completed" && (
+                                      <button
+                                        onClick={(e) => handleMarkReceived(e, receipt)}
+                                        className='bg-emerald-500 text-white px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-emerald-600 transition-all'
+                                      >
+                                        <CheckCircle2 size={14} /> Mark Received
+                                      </button>
+                                    )}
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();

@@ -128,18 +128,42 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
         (group) => group[0].hardware_inventory,
       );
 
-      const historyData = products.map((prod) => ({
-        name: prod.name,
-        initial_qty:
-          (prod.stock_balance || 0) -
-          (prod.inbound_qty || 0) +
-          (prod.outbound_qty || 0),
-        inbound_qty: prod.inbound_qty || 0,
-        outbound_qty: prod.outbound_qty || 0,
-        final_balance: prod.stock_balance || 0,
-        snapshot_date: today,
-        po_number: prod.sku,
-      }));
+      // Fetch supplier costs to compute total_value
+      const { data: pricingData } = await supabase
+        .from("product_pricing")
+        .select("product_id, supplier_cost");
+      const costMap = {};
+      (pricingData || []).forEach((p) => {
+        costMap[p.product_id] = p.supplier_cost || 0;
+      });
+
+      // Also fetch product ids from hardware_inventory for mapping
+      const { data: invData } = await supabase
+        .from("hardware_inventory")
+        .select("id, sku");
+      const skuToId = {};
+      (invData || []).forEach((i) => { skuToId[i.sku] = i.id; });
+
+      const historyData = products.map((prod) => {
+        const productId = skuToId[prod.sku];
+        const cost = costMap[productId] || 0;
+        const balance = prod.stock_balance || 0;
+        return {
+          name: prod.name,
+          sku: prod.sku,
+          category: prod.category || null,
+          initial_qty:
+            (prod.stock_balance || 0) -
+            (prod.inbound_qty || 0) +
+            (prod.outbound_qty || 0),
+          inbound_qty: prod.inbound_qty || 0,
+          outbound_qty: prod.outbound_qty || 0,
+          final_balance: balance,
+          total_value: balance * cost,
+          snapshot_date: today,
+          po_number: prod.sku,
+        };
+      });
 
       await supabase.from("daily_ledger_history").insert(historyData);
       await supabase
@@ -204,7 +228,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400 min-w-[160px]'
+          className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400 min-w-40'
         >
           <option value=''>All Categories</option>
           {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -229,7 +253,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
           <ArrowDownUp className='text-teal-600' size={24} /> Daily Movement
           Ledger
         </h2>
-        <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
+        <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
             <thead>
@@ -313,7 +337,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
         <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
           <Package className='text-teal-600' size={24} /> Master Batch Records
         </h2>
-        <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
+        <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
             <thead>
@@ -434,7 +458,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
           <Clock size={24} className='text-slate-400' /> Ledger History (EOD
           Snapshots)
         </h2>
-        <div className='bg-white rounded-[2rem] shadow-sm overflow-hidden'>
+        <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
             <thead>
