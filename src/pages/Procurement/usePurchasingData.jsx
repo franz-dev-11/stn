@@ -144,6 +144,7 @@ export const usePurchasing = () => {
     view,
     setView,
     items: filteredItems,
+    allItems: items,
     suppliers,
     cart,
     setCart,

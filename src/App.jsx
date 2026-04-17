@@ -1,8 +1,7 @@
 import React, { Suspense, lazy, useState, useEffect } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { supabase } from "./supabaseClient";
-import { initializeAvatarStorage } from "./utils/avatarStorage";
 import { Menu, X } from "lucide-react";
+import { supabase } from "./supabaseClient";
 
 // Components & Pages
 import Sidebar from "./components/Sidebar";
@@ -17,17 +16,17 @@ const RecordSales = lazy(() => import("./pages/PointofSales/RecordSales"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const ItemAction = lazy(() => import("./pages/ItemAction"));
 const Login = lazy(() => import("./pages/Login"));
-const Signup = lazy(() => import("./pages/Signup"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
-const PendingApproval = lazy(() => import("./pages/PendingApproval"));
+const AccountCreation = lazy(() => import("./pages/AccountCreation"));
+const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const BatchRecord = lazy(() => import("./pages/BatchRecord"));
 
-const AppLayout = ({ session }) => {
+const AppLayout = ({ currentUser, mustChangePassword, setCurrentUser }) => {
   const [currentPage, setCurrentPage] = useState("Dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  if (!session) return <Navigate to='/login' replace />;
+  if (!currentUser) return <Navigate to="/login" replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
 
   return (
     <div className='flex min-h-screen w-full overflow-x-hidden md:h-screen md:overflow-hidden'>
@@ -47,6 +46,7 @@ const AppLayout = ({ session }) => {
         setCurrentPage={setCurrentPage}
         isMobileMenuOpen={isMobileMenuOpen}
         setIsMobileMenuOpen={setIsMobileMenuOpen}
+        setCurrentUser={setCurrentUser}
       />
       <div className='flex-1 flex flex-col overflow-y-auto overflow-x-hidden'>
         <Outlet />
@@ -56,131 +56,89 @@ const AppLayout = ({ session }) => {
 };
 
 function App() {
-  const [session, setSession] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [approvalStatus, setApprovalStatus] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const isPending = approvalStatus === "pending";
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem("stn_user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // --- ADDED STATES FOR QR SYSTEM NAVIGATION ---
+  // Re-validate session against DB on load — catches must_change_password updates etc.
+  useEffect(() => {
+    const stored = sessionStorage.getItem("stn_user");
+    if (!stored) return;
+    let user;
+    try { user = JSON.parse(stored); } catch { return; }
+    if (!user?.id) return;
+
+    supabase
+      .from("users")
+      .select("id, employee_id, first_name, last_name, role, username, must_change_password")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) {
+          // User deleted or doesn't exist — force logout
+          sessionStorage.removeItem("stn_user");
+          setCurrentUser(null);
+        } else {
+          sessionStorage.setItem("stn_user", JSON.stringify(data));
+          setCurrentUser(data);
+        }
+      });
+  }, []);
+
+  const userRole = currentUser?.role ?? null;
+
+  // --- STATES FOR QR SYSTEM NAVIGATION ---
   const [inventoryView, setInventoryView] = useState("Inventory");
   const [selectedPO, setSelectedPO] = useState(null);
-
-  // Auth listener — synchronous, never awaits anything.
-  // Sets session + isAuthReady immediately so route guards never get stuck.
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession);
-      setIsAuthReady(true);
-      if (!newSession) {
-        setApprovalStatus(null);
-        setUserRole(null);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Initialize avatar storage bucket on app launch
-  useEffect(() => {
-    initializeAvatarStorage().catch((err) => {
-      console.warn("[App] Avatar storage init warning:", err.message);
-      // Non-blocking; app continues without avatars if this fails
-    });
-  }, []);
-
-  // Profile fetch — runs whenever the logged-in user changes.
-  // Non-blocking: route guards don't wait on this.
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    supabase
-      .from("profiles")
-      .select("approval_status, role")
-      .eq("id", session.user.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (error) {
-          console.warn("[App] Profile fetch failed:", error.message);
-          return;
-        }
-        console.log("[App] Profile loaded:", data);
-        setApprovalStatus(data?.approval_status ?? null);
-        setUserRole(data?.role ?? null);
-      });
-  }, [session?.user?.id]);
 
   return (
     <Suspense fallback={null}>
       <Routes>
-        {/* Public routes – always accessible */}
-        <Route path='/login' element={<Login />} />
-        <Route path='/signup' element={<Signup />} />
-        <Route path='/reset-password' element={<ResetPassword />} />
+        {/* Routes */}
         <Route path='/batch/:batchRef' element={<BatchRecord />} />
 
-        {/* Pending approval page – just needs a valid session */}
         <Route
-          path='/pending-approval'
-          element={
-            !isAuthReady ? null : !session ? (
-              <Navigate to='/login' replace />
-            ) : (
-              <PendingApproval />
-            )
-          }
+          path='/login'
+          element={currentUser ? <Navigate to='/dashboard' replace /> : <Login setCurrentUser={setCurrentUser} />}
         />
+        <Route path='/change-password' element={<ChangePassword setCurrentUser={setCurrentUser} />} />
 
-        {/* Protected routes – session required, pending users get bounced */}
-        <Route
-          element={
-            !isAuthReady ? null : !session ? (
-              <Navigate to='/login' replace />
-            ) : isPending ? (
-              <Navigate to='/pending-approval' replace />
-            ) : (
-              <AppLayout session={session} />
-            )
-          }
-        >
-          <Route path='/dashboard' element={<Dashboard />} />
+        <Route element={<AppLayout currentUser={currentUser} mustChangePassword={currentUser?.must_change_password === true} setCurrentUser={setCurrentUser} />}>
 
-          {/* MODIFIED INVENTORY ROUTE */}
-          <Route
-            path='/inventory'
-            element={
+          <Route path='/dashboard' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <Dashboard />} />
+          <Route path='/inventory' element={userRole === "Staff" ? <Navigate to='/pos' replace /> :
               inventoryView === "Item Action" ? (
-                <ItemAction
-                  po_number={selectedPO}
-                  setCurrentPage={setInventoryView}
-                />
+                <ItemAction po_number={selectedPO} setCurrentPage={setInventoryView} />
               ) : (
-                <Inventory
-                  setSelectedPO={setSelectedPO}
-                  setCurrentPage={setInventoryView}
-                />
+                <Inventory setSelectedPO={setSelectedPO} setCurrentPage={setInventoryView} />
               )
             }
           />
 
-          <Route path='/pricing' element={<Pricing />} />
-          <Route path='/purchasing' element={<Purchasing />} />
-          <Route path='/purchase-history' element={<PurchaseHistory />} />
-          <Route path='/inbound' element={<InboundDelivery />} />
+          <Route path='/pricing' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <Pricing />} />
+          <Route path='/purchasing' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <Purchasing />} />
+          <Route path='/purchase-history' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <PurchaseHistory />} />
+          <Route path='/inbound' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <InboundDelivery />} />
           <Route path='/pos' element={<RecordSales />} />
           <Route path='/invoice-history' element={<InvoiceHistory />} />
           <Route path='/outbound' element={<OutboundDelivery />} />
-
-          <Route
-            path='/manage-users'
-            element={
-              userRole === "Super Admin" ? (
-                <UserManagement />
+          <Route path='/dashboard' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <Dashboard />} />
+          <Route path='/inventory' element={userRole === "Staff" ? <Navigate to='/pos' replace /> :
+              inventoryView === "Item Action" ? (
+                <ItemAction po_number={selectedPO} setCurrentPage={setInventoryView} />
               ) : (
-                <Navigate to='/dashboard' replace />
+                <Inventory setSelectedPO={setSelectedPO} setCurrentPage={setInventoryView} />
               )
             }
           />
+
+          <Route path='/account-creation' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <AccountCreation />} />
+          <Route path='/manage-users' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <UserManagement />} />
         </Route>
 
         <Route path='*' element={<Navigate to='/login' replace />} />

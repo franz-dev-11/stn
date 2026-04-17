@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { QRCodeSVG } from "qrcode.react";
 import {
   Package,
   Clock,
@@ -8,6 +9,9 @@ import {
   ArrowRight,
   ChevronDown,
   Search,
+  Download,
+  X,
+  QrCode,
 } from "lucide-react";
 
 const Inventory = ({ setCurrentPage, setSelectedPO }) => {
@@ -15,6 +19,9 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
   const [archiveItems, setArchiveItems] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [expandedNames, setExpandedNames] = useState({});
+  const [showLedger, setShowLedger] = useState(true);
+  const [showBatches, setShowBatches] = useState(true);
+  const [showArchive, setShowArchive] = useState(true);
   const [currentTime, setCurrentTime] = useState(
     new Date().toLocaleTimeString(),
   );
@@ -22,6 +29,9 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
   const [category, setCategory] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [selectedPOForQR, setSelectedPOForQR] = useState("");
+  const [poQRData, setPOQRData] = useState(null);
+  const printTableRef = useRef(null);
 
   useEffect(() => {
     fetchInventory();
@@ -32,6 +42,14 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
     );
     return () => clearInterval(timer);
   }, []);
+
+  const extractPO = (batchNumber) => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (batchNumber?.length > 37 && uuidRegex.test(batchNumber.slice(-36))) {
+      return batchNumber.slice(0, -37);
+    }
+    return batchNumber;
+  };
 
   const fetchInventory = async () => {
     try {
@@ -54,10 +72,29 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
         .order("batch_date", { ascending: false });
 
       if (error) throw error;
-      setBatches(data || []);
+
+      // Fetch date_arrived from order_scheduling keyed by order_number
+      const poNumbers = [...new Set((data || []).map((b) => extractPO(b.batch_number)).filter(Boolean))];
+      let dateArrivedMap = {};
+      if (poNumbers.length > 0) {
+        const { data: schedData } = await supabase
+          .from("order_scheduling")
+          .select("order_number, date_arrived")
+          .in("order_number", poNumbers);
+        (schedData || []).forEach((row) => {
+          if (row.date_arrived) dateArrivedMap[row.order_number] = row.date_arrived;
+        });
+      }
+
+      const enriched = (data || []).map((b) => ({
+        ...b,
+        _date_arrived: dateArrivedMap[extractPO(b.batch_number)] || null,
+      }));
+
+      setBatches(enriched);
 
       const initialExpanded = {};
-      data?.forEach((b) => {
+      enriched.forEach((b) => {
         if (b.hardware_inventory)
           initialExpanded[b.hardware_inventory.name] = true;
       });
@@ -78,6 +115,57 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
     } catch (err) {
       console.error("Archive Error:", err.message);
     }
+  };
+
+  const groupedByPO = batches.reduce((acc, batch) => {
+    const po = extractPO(batch.batch_number);
+    if (!acc[po]) acc[po] = [];
+    acc[po].push({
+      batchNumber: batch.batch_number,
+      itemName: batch.hardware_inventory?.name || "Unknown Item",
+      qty: batch.current_stock ?? 0,
+      unit: batch.hardware_inventory?.unit || "",
+      batchDate: batch._date_arrived || batch.batch_date,
+    });
+    return acc;
+  }, {});
+
+  const handleDownloadPOQRs = () => {
+    if (!selectedPOForQR || !groupedByPO[selectedPOForQR]) return;
+    setPOQRData({ po: selectedPOForQR, items: groupedByPO[selectedPOForQR] });
+  };
+
+  const handlePrint = () => {
+    if (!printTableRef.current) return;
+    const tableHTML = printTableRef.current.outerHTML;
+    const win = window.open("", "_blank");
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>QR Sheet - ${poQRData.po}</title>
+          <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: sans-serif; }
+            table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+            td { border: 1px solid #999; padding: 8px; vertical-align: middle; word-break: break-word; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
+            .qr-col-qr  { width: 28mm; }
+            .qr-col-po  { width: 34mm; }
+            .qr-col-date{ width: 38mm; }
+            p { margin: 0; }
+            .mono { font-family: monospace; font-size: 10px; color: #666; word-break: break-all; line-height: 1.4; }
+            .name { font-size: 13px; font-weight: 900; text-transform: uppercase; color: #111; }
+            .recv { font-size: 12px; font-weight: 700; color: #444; }
+          </style>
+        </head>
+        <body>${tableHTML}</body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 400);
   };
 
   const groupedByName = batches.reduce((acc, batch) => {
@@ -249,26 +337,35 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
 
       {/* 1. DAILY MOVEMENT LEDGER */}
       <div className='mb-8 sm:mb-14'>
-        <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
-          <ArrowDownUp className='text-teal-600' size={24} /> Daily Movement
-          Ledger
-        </h2>
-        <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
+        <button
+          onClick={() => setShowLedger((v) => !v)}
+          className='w-full text-left flex items-center gap-2 mb-5 group'
+        >
+          <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2'>
+            <ArrowDownUp className='text-teal-600' size={24} /> Daily Movement Ledger
+          </h2>
+          <ChevronDown
+            size={20}
+            className={`ml-auto text-slate-400 group-hover:text-teal-600 transition-transform duration-300 ${showLedger ? '' : '-rotate-90'}`}
+          />
+        </button>
+        {showLedger && (
+          <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
             <thead>
               <tr className='bg-black text-white text-[10px] font-black uppercase'>
                 <th className='px-8 py-6'>Item Details</th>
                 <th className='px-8 py-6'>Category</th>
-                <th className='px-8 py-6 text-center'>Opening</th>
+                <th className='px-8 py-6 text-center'>Current Stock</th>
                 <th className='px-8 py-6 text-teal-400 text-center'>
-                  Inbound (+)
+                  In (+)
                 </th>
                 <th className='px-8 py-6 text-orange-400 text-center'>
-                  Outbound (-)
+                  Out (-)
                 </th>
                 <th className='px-8 py-6 bg-black text-teal-400 text-center border-l border-slate-700'>
-                  Live Balance
+                  Stock Balance
                 </th>
               </tr>
             </thead>
@@ -327,17 +424,53 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                 </tr>
               )}
             </tbody>
-          </table>
+            </table>
+            </div>
           </div>
+        )}
+      </div>
+
+      {/* QR DOWNLOAD BY PO */}
+      <div className='mb-8 bg-white rounded-2xl shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 no-print'>
+        <div className='flex items-center gap-2 shrink-0'>
+          <QrCode size={18} className='text-teal-600' />
+          <span className='text-[10px] font-black uppercase tracking-widest text-slate-500'>Download QRs by PO</span>
         </div>
+        <select
+          value={selectedPOForQR}
+          onChange={(e) => setSelectedPOForQR(e.target.value)}
+          className='flex-1 py-2.5 px-4 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-xs uppercase outline-none focus:ring-2 focus:ring-teal-400'
+        >
+          <option value=''>Select PO Number...</option>
+          {Object.entries(groupedByPO).map(([po, items]) => (
+            <option key={po} value={po}>{po} — {items.length} item{items.length !== 1 ? 's' : ''}</option>
+          ))}
+        </select>
+        <button
+          onClick={handleDownloadPOQRs}
+          disabled={!selectedPOForQR}
+          className='flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400 text-white px-5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all active:scale-95 shrink-0'
+        >
+          <Download size={15} /> Download QRs
+        </button>
       </div>
 
       {/* 2. MASTER RECORDS (BATCHES) */}
       <div className='mb-8 sm:mb-14'>
-        <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-5'>
-          <Package className='text-teal-600' size={24} /> Master Batch Records
-        </h2>
-        <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
+        <button
+          onClick={() => setShowBatches((v) => !v)}
+          className='w-full text-left flex items-center gap-2 mb-5 group'
+        >
+          <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2'>
+            <Package className='text-teal-600' size={24} /> Master Batch Records
+          </h2>
+          <ChevronDown
+            size={20}
+            className={`ml-auto text-slate-400 group-hover:text-teal-600 transition-transform duration-300 ${showBatches ? '' : '-rotate-90'}`}
+          />
+        </button>
+        {showBatches && (
+          <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
             <thead>
@@ -447,18 +580,28 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                 </tr>
               )}
             </tbody>
-          </table>
+            </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* 3. LEDGER HISTORY (ARCHIVE) */}
       <div className='no-print'>
-        <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight mb-5 flex items-center gap-2'>
-          <Clock size={24} className='text-slate-400' /> Ledger History (EOD
-          Snapshots)
-        </h2>
-        <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
+        <button
+          onClick={() => setShowArchive((v) => !v)}
+          className='w-full text-left flex items-center gap-2 mb-5 group'
+        >
+          <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2'>
+            <Clock size={24} className='text-slate-400' /> Ledger History (EOD Snapshots)
+          </h2>
+          <ChevronDown
+            size={20}
+            className={`ml-auto text-slate-400 group-hover:text-teal-600 transition-transform duration-300 ${showArchive ? '' : '-rotate-90'}`}
+          />
+        </button>
+        {showArchive && (
+          <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
             <thead>
@@ -523,7 +666,76 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
           </table>
           </div>
         </div>
+        )}
       </div>
+
+      {/* QR PRINT MODAL */}
+      {poQRData && (
+        <div className='fixed inset-0 z-50 bg-white overflow-auto flex flex-col'>
+          {/* Toolbar */}
+          <div className='flex items-center justify-between px-8 py-5 border-b border-slate-100 bg-white sticky top-0 z-10'>
+            <div>
+              <p className='text-[10px] font-black uppercase tracking-widest text-teal-600 mb-0.5'>Batch QR Sheet</p>
+              <h2 className='text-xl font-black text-slate-900 uppercase'>{poQRData.po}</h2>
+              <p className='text-xs text-slate-500 font-bold mt-0.5'>{poQRData.items.length} batch{poQRData.items.length !== 1 ? 'es' : ''}</p>
+            </div>
+            <div className='flex items-center gap-3'>
+              <button
+                onClick={handlePrint}
+                className='flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all active:scale-95'
+              >
+                <Download size={15} /> Print / Save PDF
+              </button>
+              <button
+                onClick={() => setPOQRData(null)}
+                className='p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all'
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Preview Table */}
+          <div className='p-8 overflow-auto'>
+            <table ref={printTableRef} className='w-full border-collapse table-fixed'>
+              <colgroup>
+                <col style={{ width: '112px' }} />
+                <col style={{ width: '136px' }} />
+                <col />
+                <col style={{ width: '152px' }} />
+              </colgroup>
+              <tbody>
+                {poQRData.items.map((item) => (
+                  <tr key={item.batchNumber} className='border border-slate-300'>
+                    <td className='border border-slate-300 p-2 align-middle'>
+                      <QRCodeSVG
+                        value={`${window.location.origin}/batch/${item.batchNumber}`}
+                        size={90}
+                        level='H'
+                        includeMargin
+                      />
+                    </td>
+                    <td className='border border-slate-300 p-3 align-middle'>
+                      <p className='text-[11px] font-mono text-slate-500 break-all leading-relaxed'>{extractPO(item.batchNumber)}</p>
+                    </td>
+                    <td className='border border-slate-300 p-3 align-middle'>
+                      <p className='text-sm font-black uppercase text-slate-900 leading-snug'>{item.itemName}</p>
+                    </td>
+                    <td className='border border-slate-300 p-3 align-middle'>
+                      <p className='text-sm font-bold text-slate-700'>
+                        Received:{' '}
+                        {item.batchDate
+                          ? new Date(item.batchDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '—'}
+                      </p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

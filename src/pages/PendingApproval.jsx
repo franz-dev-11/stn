@@ -1,20 +1,15 @@
 import React from "react";
-import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 import { Clock, LogOut, ShieldCheck } from "lucide-react";
 import stnLogo from "../assets/stn logo.png";
 
-const PendingApproval = () => {
-  const handleLogout = async () => {
-    try {
-      // Use local scope to guarantee client session is removed even if network is flaky.
-      const { error } = await supabase.auth.signOut({ scope: "local" });
-      if (error) throw error;
-      window.location.replace("/login");
-    } catch (err) {
-      console.error("Logout failed:", err.message);
-      // Force navigate anyway so user can switch accounts.
-      window.location.replace("/login");
-    }
+const PendingApproval = ({ setCurrentUser }) => {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("stn_user");
+    if (setCurrentUser) setCurrentUser(null);
+    navigate("/login", { replace: true });
   };
 
   return (

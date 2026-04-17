@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { supabase } from "../supabaseClient";
 import {
   LayoutDashboardIcon,
   UserPlus,
@@ -13,7 +12,6 @@ import {
   Package,
   History,
   LogOut,
-  ShieldCheck,
   Menu,
   X,
 } from "lucide-react";
@@ -24,61 +22,49 @@ const Sidebar = ({
   setCurrentPage,
   isMobileMenuOpen,
   setIsMobileMenuOpen,
+  setCurrentUser,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [user, setUser] = useState({
-    name: "User",
-    role: "Staff",
-    email: "",
-    avatarUrl: "",
+  const [user] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem("stn_user");
+      if (stored) {
+        const u = JSON.parse(stored);
+        return {
+          name: `${u.first_name} ${u.last_name}`.trim() || u.username || "User",
+          role: u.role || "Staff",
+          initial: (u.first_name || u.username || "U").charAt(0).toUpperCase(),
+        };
+      }
+    } catch {}
+    return { name: "User", role: "Staff", initial: "U" };
   });
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const BUCKET = import.meta.env.VITE_SUPABASE_AVATAR_BUCKET || "avatars";
-
-    const mapAuthUser = async (authUser) => {
-      if (!authUser) return;
-
-      let avatarUrl = authUser.user_metadata?.avatar_url || "";
-      const avatarPath = authUser.user_metadata?.avatar_path || "";
-
-      if (avatarPath) {
-        const { data: signedData } = await supabase.storage
-          .from(BUCKET)
-          .createSignedUrl(avatarPath, 31536000);
-        if (signedData?.signedUrl) avatarUrl = signedData.signedUrl;
-      }
-
-      setUser({
-        name:
-          authUser.user_metadata?.full_name ||
-          authUser.email?.split("@")[0] ||
-          "User",
-        role: authUser.user_metadata?.role || "Administrator",
-        email: authUser.email || "",
-        avatarUrl,
-      });
-    };
-
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      mapAuthUser(authUser);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      mapAuthUser(session?.user || null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const isStaff = user.role === "Staff";
 
   // Standard menu sections
   const menuSections = [
     {
+      title: "ACCOUNTS",
+      roles: ["Super Admin", "Admin"],
+      items: [
+        {
+          icon: <UserPlus size={20} />,
+          label: "Account Creation",
+          path: "/account-creation",
+        },
+        {
+          icon: <Users size={20} />,
+          label: "Manage Users",
+          path: "/manage-users",
+        },
+      ],
+    },
+    {
       title: "INVENTORY",
+      roles: ["Super Admin", "Admin"],
       items: [
         {
           icon: <LayoutDashboardIcon size={20} />,
@@ -90,12 +76,14 @@ const Sidebar = ({
     },
     {
       title: "PRICING",
+      roles: ["Super Admin", "Admin"],
       items: [
         { icon: <Tag size={20} />, label: "Edit Pricing", path: "/pricing" },
       ],
     },
     {
-      title: "INBOUND",
+      title: "STOCKIN",
+      roles: ["Super Admin", "Admin"],
       items: [
         {
           icon: <ShoppingCart size={20} />,
@@ -109,13 +97,14 @@ const Sidebar = ({
         },
         {
           icon: <Truck size={20} />,
-          label: "Inbound Delivery",
+          label: "Stockin Delivery",
           path: "/inbound",
         },
       ],
     },
     {
-      title: "OUTBOUND",
+      title: "STOCKOUT",
+      roles: ["Super Admin", "Admin", "Staff"],
       items: [
         {
           icon: <Calculator size={20} />,
@@ -129,27 +118,14 @@ const Sidebar = ({
         },
         {
           icon: <Truck size={20} />,
-          label: "Outbound Delivery",
+          label: "Stockout Delivery",
           path: "/outbound",
         },
       ],
     },
   ];
 
-  // Dynamic section for Super Admin
-  const adminSection =
-    user.role === "Super Admin"
-      ? {
-          title: "ADMINISTRATION",
-          items: [
-            {
-              icon: <ShieldCheck size={20} />,
-              label: "Manage Users",
-              path: "/manage-users",
-            },
-          ],
-        }
-      : null;
+  const visibleSections = menuSections.filter((s) => s.roles.includes(user.role));
 
   const NavItem = ({ icon, label, path }) => {
     const isActive = location.pathname === path;
@@ -191,8 +167,8 @@ const Sidebar = ({
         </div>
 
         <div className='flex-1 overflow-y-auto px-3'>
-          {/* Render standard sections */}
-          {menuSections.map((section, idx) => (
+          {/* Render role-filtered sections */}
+          {visibleSections.map((section, idx) => (
             <div
               key={idx}
               className='mb-2 sm:mb-3 border-t border-gray-100 pt-2 sm:pt-3'
@@ -211,36 +187,12 @@ const Sidebar = ({
             </div>
           ))}
 
-          {/* Render Admin section if it exists */}
-          {adminSection && (
-            <div className='mb-2 sm:mb-3 border-t border-gray-100 pt-2 sm:pt-3'>
-              <h3 className='text-[8px] sm:text-[9px] font-bold text-gray-400 tracking-[0.15em] mb-2 sm:mb-2 ml-2 sm:ml-2 uppercase'>
-                {adminSection.title}
-              </h3>
-              {adminSection.items.map((item, i) => (
-                <NavItem
-                  key={i}
-                  icon={item.icon}
-                  label={item.label}
-                  path={item.path}
-                />
-              ))}
-            </div>
-          )}
         </div>
 
         <div className='p-2 sm:p-2 border-t border-gray-100'>
           <div className='flex items-center space-x-2 p-1 relative'>
             <div className='w-8 sm:w-8 h-8 sm:h-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs uppercase'>
-              {user.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt='Profile avatar'
-                  className='w-full h-full object-cover'
-                />
-              ) : (
-                user.name.charAt(0)
-              )}
+              {user.initial}
             </div>
             <div className='flex-1 min-w-0'>
               <p className='text-[10px] sm:text-xs font-bold text-slate-800 truncate'>
@@ -263,7 +215,9 @@ const Sidebar = ({
                 <button
                   onClick={() => {
                     setIsProfileMenuOpen(false);
-                    supabase.auth.signOut();
+                    sessionStorage.removeItem("stn_user");
+                    setCurrentUser(null);
+                    navigate("/login");
                   }}
                   className='w-full text-left px-2 sm:px-3 py-1.5 text-[8px] sm:text-[9px] text-rose-600 hover:bg-rose-50 flex items-center gap-1.5'
                 >

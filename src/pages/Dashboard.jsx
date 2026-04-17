@@ -30,6 +30,7 @@ import {
   RefreshCw,
   ShoppingCart,
   TrendingUp,
+  X,
 } from "lucide-react";
 
 const RANGE_OPTIONS = [
@@ -84,7 +85,11 @@ const Dashboard = () => {
   const [reorderRange, setReorderRange] = useState(30);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [trendMode, setTrendMode] = useState("units");
-  const [selectedForecastSkuId, setSelectedForecastSkuId] = useState("auto");
+
+  const [drillDown, setDrillDown] = useState(null);
+
+  const openDrill = (title, headers, rows) => setDrillDown({ title, headers, rows });
+  const closeDrill = () => setDrillDown(null);
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
@@ -747,88 +752,52 @@ const Dashboard = () => {
     [reorderSignals],
   );
 
-  const forecastSkuOptions = useMemo(() => {
-    const source = reorderSignals.length ? reorderSignals : filteredInventoryItems;
-    return source.slice(0, 20).map((item) => ({
-      id: item.id,
-      name: item.name,
-    }));
-  }, [filteredInventoryItems, reorderSignals]);
-
-  const forecastSelectValue = useMemo(() => {
-    if (selectedForecastSkuId === "auto") return "auto";
-    const exists = forecastSkuOptions.some(
-      (item) => item.id === selectedForecastSkuId,
-    );
-    return exists ? selectedForecastSkuId : "auto";
-  }, [forecastSkuOptions, selectedForecastSkuId]);
-
   const demandForecast = useMemo(() => {
-    const manuallySelectedItem =
-      selectedForecastSkuId !== "auto"
-        ? filteredInventoryItems.find(
-            (item) => item.id === selectedForecastSkuId,
-          ) ||
-          reorderSignals.find((item) => item.id === selectedForecastSkuId) ||
-          null
-        : null;
-
-    const focusItem =
-      manuallySelectedItem || reorderSignals[0] || filteredInventoryItems[0] || null;
-    if (!focusItem) {
-      return { focusLabel: "No SKU", data: [] };
-    }
+    if (!filteredInventoryItems.length) return { data: [] };
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const windowDays = 30;
     const start = new Date(today);
     start.setDate(today.getDate() - (windowDays - 1));
-
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
+    // Aggregate actual daily sales across ALL items
     const actualByDay = {};
     salesItems.forEach((row) => {
-      if (row.product_id !== focusItem.id) return;
       const tx = row.sales_transactions;
-      const txStatus = (tx?.status || "").toLowerCase();
-      if (txStatus === "cancelled") return;
+      if ((tx?.status || "").toLowerCase() === "cancelled") return;
       const txDate = toDate(tx?.created_at);
       if (!txDate || txDate < start || txDate >= tomorrow) return;
-
       const key = txDate.toISOString().slice(0, 10);
       actualByDay[key] = (actualByDay[key] || 0) + safeNumber(row.quantity);
     });
 
+    // Projected: sum of all items' historical avg daily demand
+    const totalProjectedDaily = filteredInventoryItems.reduce((sum, item) => {
+      return sum + safeNumber(dailyDemandByItem[item.sku || item.name]);
+    }, 0);
+
+    const totalActual = Object.values(actualByDay).reduce((s, v) => s + v, 0);
+    const projectedDailyRate = totalProjectedDaily > 0 ? totalProjectedDaily : totalActual / windowDays || 1;
+
+    // Build daily rows: actual units sold each day vs projected daily rate
     const rows = [];
-    const rolling = [];
     for (let i = 0; i < windowDays; i += 1) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       const key = d.toISOString().slice(0, 10);
-      const actual = safeNumber(actualByDay[key]);
-      rolling.push(actual);
-
-      const lookback = rolling.slice(Math.max(rolling.length - 7, 0));
-      const projected =
-        lookback.reduce((sum, value) => sum + value, 0) /
-        Math.max(lookback.length, 1);
-
       rows.push({
         date: key,
         label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        actual,
-        projected,
+        actual: safeNumber(actualByDay[key]),
+        projected: parseFloat(projectedDailyRate.toFixed(1)),
       });
     }
 
-    return {
-      focusLabel: focusItem.name,
-      data: rows,
-    };
-  }, [filteredInventoryItems, reorderSignals, salesItems, selectedForecastSkuId]);
+    return { data: rows };
+  }, [filteredInventoryItems, salesItems, dailyDemandByItem]);
 
   return (
     <main className='flex-1 p-3 sm:p-4 md:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans overflow-x-hidden'>
@@ -838,7 +807,7 @@ const Dashboard = () => {
             <BarChart3 className='text-teal-600' size={32} /> DASHBOARD
           </h1>
           <p className='mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-slate-600'>
-            Live SQL Analytics | Inventory, Sales, Procurement
+          Live Analytics | Inventory, Sales & Purchasing
           </p>
         </div>
 
@@ -900,72 +869,129 @@ const Dashboard = () => {
 
       <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8'>
         <StatCard
-          label='On-Hand Units'
+          label='Total Items on Hand'
           value={kpis.onHand.toLocaleString()}
           icon={<Package className='text-teal-600' />}
-          sub={`Stock balance: ${kpis.stockBalance.toLocaleString()}`}
+          sub={`Current stock balance: ${kpis.stockBalance.toLocaleString()}`}
+          onClick={() => openDrill(
+            'Total Items on Hand',
+            ['Item', 'Category', 'Current Stock', 'Stock Balance'],
+            filteredInventoryItems.map(i => [i.name, i.category || '—', safeNumber(i.availableStock), safeNumber(i.stock_balance)])
+          )}
         />
         <StatCard
-          label='Sales Revenue'
+          label='Total Sales'
           value={formatCurrency(kpis.revenue)}
           icon={<TrendingUp className='text-emerald-600' />}
           sub={selectedRangeLabel}
           trend={<ArrowUpRight size={14} className='text-emerald-500' />}
+          onClick={() => openDrill(
+            'Total Sales',
+            ['Date', 'Status', 'Amount'],
+            filteredSales.map(s => [new Date(s.created_at).toLocaleDateString(), s.status || '—', formatCurrency(s.total_amount)])
+          )}
         />
         <StatCard
-          label='Procurement Spend'
+          label='Total Purchases'
           value={formatCurrency(kpis.procurementSpend)}
           icon={<ShoppingCart className='text-purple-600' />}
-          sub={`Pending inbound: ${kpis.pendingInbound}`}
+          sub={`Items waiting to arrive: ${kpis.pendingInbound}`}
+          onClick={() => openDrill(
+            'Total Purchases',
+            ['Date', 'Supplier', 'Status', 'Amount'],
+            filteredPO.map(p => [new Date(p.created_at).toLocaleDateString(), p.supplier_name || '—', p.status || '—', formatCurrency(p.total_amount)])
+          )}
         />
         <StatCard
-          label='Stockout Risk'
+          label='Items Running Low'
           value={kpis.risky}
           icon={<AlertTriangle className='text-rose-600' />}
-          sub={`Low stock SKUs: ${kpis.lowStock}`}
+          sub={`Low stock items: ${kpis.lowStock}`}
           isAlert
+          onClick={() => openDrill(
+            'Items Running Low',
+            ['Item', 'Category', 'Current Stock', 'Days Left'],
+            stockoutRiskItems.map(i => [i.name, i.category || '—', safeNumber(i.availableStock), i.runwayDays.toFixed(1)])
+          )}
         />
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8'>
         <StatCard
-          label='Open Sales Orders'
+          label='Ongoing Sales Orders'
           value={erpOps.openSalesOrders.toLocaleString()}
           icon={<Activity className='text-cyan-600' />}
-          sub='Statuses not completed'
+          sub='Orders not yet completed'
+          onClick={() => openDrill(
+            'Ongoing Sales Orders',
+            ['Date', 'Status', 'Amount'],
+            filteredSales.filter(s => (s.status || '').toLowerCase() !== 'completed').map(s => [new Date(s.created_at).toLocaleDateString(), s.status || '—', formatCurrency(s.total_amount)])
+          )}
         />
         <StatCard
-          label='Open Purchase Orders'
+          label='Ongoing Purchase Orders'
           value={erpOps.openPurchaseOrders.toLocaleString()}
           icon={<ShoppingCart className='text-indigo-600' />}
-          sub='Pending, approved, or processing'
+          sub='Pending or being processed'
+          onClick={() => openDrill(
+            'Ongoing Purchase Orders',
+            ['Date', 'Supplier', 'Status', 'Amount'],
+            filteredPO.filter(p => { const st = (p.status || '').toLowerCase(); return st !== 'completed' && st !== 'received'; }).map(p => [new Date(p.created_at).toLocaleDateString(), p.supplier_name || '—', p.status || '—', formatCurrency(p.total_amount)])
+          )}
         />
         <StatCard
-          label='Overdue Inbound ETAs'
+          label='Late Deliveries'
           value={erpOps.overdueInbound.toLocaleString()}
           icon={<AlertTriangle className='text-orange-600' />}
-          sub='Pending/In transit with past ETA'
+          sub='Expected but not yet arrived'
           isAlert={erpOps.overdueInbound > 0}
+          onClick={() => {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const rows = filteredScheduling.filter(r => { const st = (r.status||'').toLowerCase(); const eta = toDate(r.eta); if(!['pending','in transit'].includes(st)||!eta) return false; eta.setHours(0,0,0,0); return eta < today; });
+            openDrill('Late Deliveries', ['Product ID', 'Status', 'ETA', 'Qty'], rows.map(r => [r.product_id || '—', r.status || '—', r.eta ? new Date(r.eta).toLocaleDateString() : '—', safeNumber(r.quantity)]));
+          }}
         />
         <StatCard
-          label='User Approval Queue'
+          label='Accounts for Approval'
           value={erpOps.pendingApprovals.toLocaleString()}
           icon={<Filter className='text-fuchsia-600' />}
-          sub={`Suppliers in master file: ${erpOps.supplierCoverage}`}
+          sub={`Suppliers on file: ${erpOps.supplierCoverage}`}
+          onClick={() => openDrill(
+            'Accounts for Approval',
+            ['Profile ID', 'Role', 'Approval Status', 'Approved'],
+            profiles.filter(p => !p.is_approved || (p.approval_status || '').toLowerCase() === 'pending').map(p => [p.id, p.role || '—', p.approval_status || '—', p.is_approved ? 'Yes' : 'No'])
+          )}
         />
       </div>
 
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8'>
-        <div className='lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm'>
+        <div
+          className='lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
+          onClick={() => {
+            const itemMap = {};
+            filteredHistory.forEach(r => {
+              const key = r.name || r.sku || 'Unknown';
+              if (!itemMap[key]) itemMap[key] = { name: r.name || '—', sku: r.sku || '—', category: r.category || '—', in: 0, out: 0, days: new Set() };
+              itemMap[key].in += safeNumber(r.inbound_qty);
+              itemMap[key].out += safeNumber(r.outbound_qty);
+              if (r.snapshot_date) itemMap[key].days.add(r.snapshot_date);
+            });
+            const rows = Object.values(itemMap)
+              .filter(i => i.in > 0 || i.out > 0)
+              .map(i => [i.name, i.sku, i.category, i.in, i.out, i.days.size > 0 ? (i.out / i.days.size).toFixed(1) : '0'])
+              .sort((a, b) => parseFloat(b[5]) - parseFloat(a[5]));
+            openDrill('Sales & Stock Trend — Items with Movement', ['Item', 'SKU', 'Category', 'Total In', 'Total Out', 'Avg Out/Day'], rows);
+          }}
+        >
           <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
             <h3 className='font-black text-slate-800 uppercase text-xs flex items-center gap-2'>
-              <TrendingUp size={16} /> Volume and Value Trend
+              <TrendingUp size={16} /> Sales & Stock Trend
             </h3>
 
-            <div className='flex items-center gap-1 rounded-lg bg-slate-100 p-1'>
+            <div className='flex items-center gap-1 rounded-lg bg-slate-100 p-1' onClick={(e) => e.stopPropagation()}>
               <button
                 type='button'
-                onClick={() => setTrendMode("units")}
+                onClick={(e) => { e.stopPropagation(); setTrendMode("units"); }}
                 className={`px-3 py-1 text-[10px] font-black uppercase rounded ${
                   trendMode === "units"
                     ? "bg-white text-slate-900"
@@ -976,7 +1002,7 @@ const Dashboard = () => {
               </button>
               <button
                 type='button'
-                onClick={() => setTrendMode("value")}
+                onClick={(e) => { e.stopPropagation(); setTrendMode("value"); }}
                 className={`px-3 py-1 text-[10px] font-black uppercase rounded ${
                   trendMode === "value"
                     ? "bg-white text-slate-900"
@@ -1038,7 +1064,7 @@ const Dashboard = () => {
                       stroke='#3b82f6'
                       strokeWidth={2.5}
                       fill='url(#trendB)'
-                      name='Inbound'
+                      name='Stock In'
                     />
                     <Area
                       type='monotone'
@@ -1046,7 +1072,7 @@ const Dashboard = () => {
                       stroke='#0d9488'
                       strokeWidth={2.5}
                       fill='url(#trendA)'
-                      name='Outbound'
+                      name='Stock Out'
                     />
                   </>
                 ) : (
@@ -1074,9 +1100,22 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className='bg-white p-6 rounded-3xl shadow-sm'>
+        <div
+          className='bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
+          onClick={() => {
+            const allItems = inventorySegments.flatMap((seg, index) =>
+              (seg.items || []).map(i => [
+                i.name,
+                i.category || '—',
+                safeNumber(i.availableStock),
+                seg.name,
+              ])
+            ).sort((a, b) => a[3].localeCompare(b[3]) || b[2] - a[2]);
+            openDrill('Stock Health Overview', ['Item', 'Category', 'Current Stock', 'Status'], allItems);
+          }}
+        >
           <h3 className='font-black text-slate-800 uppercase text-xs mb-4 flex items-center gap-2'>
-            <Boxes size={16} /> Inventory Health Mix
+            <Boxes size={16} /> Stock Health Overview
           </h3>
           <div className='h-64 w-full'>
             <ResponsiveContainer width='100%' height='100%'>
@@ -1089,6 +1128,16 @@ const Dashboard = () => {
                   innerRadius={52}
                   paddingAngle={2}
                   stroke='none'
+                  style={{ cursor: 'pointer' }}
+                  onClick={(seg, _idx, e) => {
+                    e.stopPropagation();
+                    if (!seg?.items) return;
+                    openDrill(
+                      `Stock Health: ${seg.name}`,
+                      ['Item', 'Category', 'Current Stock'],
+                      seg.items.map(i => [i.name, i.category || '—', safeNumber(i.availableStock)])
+                    );
+                  }}
                 >
                   {inventorySegments.map((entry, index) => (
                     <Cell
@@ -1119,43 +1168,36 @@ const Dashboard = () => {
             ))}
           </div>
 
-          <details className='group mt-3'>
-            <summary className='list-none cursor-pointer flex items-center justify-between text-[10px] font-black uppercase text-teal-600 py-1.5 border-t border-slate-100'>
-              <span>View All Items</span>
-              <span className='text-slate-300 group-open:rotate-180 transition-transform'>▼</span>
-            </summary>
-            <div className='mt-2 max-h-56 overflow-y-auto space-y-1 pr-1'>
-              {inventorySegments.map((segment, index) =>
-                segment.items?.length > 0 && (
-                  <div key={segment.name}>
-                    <div
-                      className='text-[9px] font-black uppercase tracking-widest py-0.5 px-1 rounded mb-0.5'
-                      style={{ color: PIE_COLORS[index % PIE_COLORS.length], backgroundColor: PIE_COLORS[index % PIE_COLORS.length] + '18' }}
-                    >
-                      {segment.name}
-                    </div>
-                    {segment.items.map(item => (
-                      <div key={item.id} className='flex justify-between text-[10px] font-bold text-slate-500 py-0.5 pl-2 border-b border-slate-50'>
-                        <span className='uppercase truncate max-w-30'>{item.name}</span>
-                        <span className='text-slate-400 shrink-0 ml-2'>{safeNumber(item.availableStock)} {item.unit || ''}</span>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-          </details>
+          <p className='mt-3 pt-1.5 border-t border-slate-100 text-[10px] font-black uppercase text-teal-600'>
+            Click to view all items →
+          </p>
         </div>
       </div>
 
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8'>
-        <div className='lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm'>
+        <div
+          className='lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
+          onClick={() => {
+            const rows = [
+              ...filteredSales
+                .filter(s => (s.status || '').toLowerCase() !== 'completed')
+                .map(s => ['Sales', s.status || '—', new Date(s.created_at).toLocaleDateString(), formatCurrency(s.total_amount)]),
+              ...filteredScheduling
+                .filter(s => ['pending','in transit'].includes((s.status || '').toLowerCase()))
+                .map(s => { const inv = inventory.find(i => i.id === s.product_id); return ['Inbound', s.status || '—', s.eta ? new Date(s.eta).toLocaleDateString() : '—', inv?.name || s.product_id || '—']; }),
+              ...filteredPO
+                .filter(p => { const st = (p.status || '').toLowerCase(); return st !== 'completed' && st !== 'received'; })
+                .map(p => ['Procurement', p.status || '—', new Date(p.created_at).toLocaleDateString(), p.supplier_name || '—']),
+            ];
+            openDrill('Order Status Overview — All Open Orders', ['Lane', 'Status', 'Date / ETA', 'Item / Supplier'], rows);
+          }}
+        >
           <div className='mb-4 flex items-center justify-between gap-3'>
             <h3 className='font-black text-slate-800 uppercase text-xs flex items-center gap-2'>
-              <Activity size={16} /> ERP Flow Control Tower
+              <Activity size={16} /> Order Status Overview
             </h3>
             <p className='text-[10px] font-bold uppercase text-slate-400'>
-              Pending vs In Progress vs Done
+              Waiting vs In Progress vs Done
             </p>
           </div>
 
@@ -1205,7 +1247,7 @@ const Dashboard = () => {
           <div className='mt-4 grid grid-cols-1 md:grid-cols-3 gap-3'>
             <div className='rounded-2xl bg-slate-50 p-3'>
               <p className='text-[10px] font-black uppercase text-slate-500'>
-                Low Coverage SKUs
+                Items Below Safe Level
               </p>
               <p className='text-xl font-black text-slate-900'>
                 {erpOps.lowCoverageSkus}
@@ -1213,7 +1255,7 @@ const Dashboard = () => {
             </div>
             <div className='rounded-2xl bg-slate-50 p-3'>
               <p className='text-[10px] font-black uppercase text-slate-500'>
-                Open SO
+                Active Sales Orders
               </p>
               <p className='text-xl font-black text-slate-900'>
                 {erpOps.openSalesOrders}
@@ -1221,7 +1263,7 @@ const Dashboard = () => {
             </div>
             <div className='rounded-2xl bg-slate-50 p-3'>
               <p className='text-[10px] font-black uppercase text-slate-500'>
-                Open PO
+                Active Purchase Orders
               </p>
               <p className='text-xl font-black text-slate-900'>
                 {erpOps.openPurchaseOrders}
@@ -1269,11 +1311,34 @@ const Dashboard = () => {
 
           <div className='mt-6 border-t border-slate-100 pt-4'>
             <p className='text-[10px] font-black uppercase text-slate-400 mb-2'>
-              Inventory Value by Category (Retail vs Cost)
+              Stock Value by Category
             </p>
             <div className='h-40'>
               <ResponsiveContainer width='100%' height='100%'>
-                <BarChart data={inventoryValueByCategory}>
+                <BarChart
+                    data={inventoryValueByCategory}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(data) => {
+                      if (!data?.activePayload?.[0]) return;
+                      const cat = data.activePayload[0].payload?.category;
+                      if (!cat) return;
+                      const pricingByProduct = {};
+                      productPricing.forEach(r => {
+                        if (!r.product_id) return;
+                        pricingByProduct[r.product_id] = {
+                          cost: safeNumber(r.supplier_cost),
+                          retail: safeNumber(r.manual_retail_price) || safeNumber(r.suggested_srp),
+                        };
+                      });
+                      const catItems = filteredInventoryItems.filter(i => i.category === cat);
+                      const rows = catItems.map(i => {
+                        const p = pricingByProduct[i.id] || { cost: 0, retail: 0 };
+                        const stock = safeNumber(i.availableStock);
+                        return [i.name, stock, formatCurrency(p.retail), formatCurrency(p.cost), formatCurrency(stock * p.retail), formatCurrency(stock * p.cost)];
+                      }).sort((a, b) => parseFloat(b[4].replace(/[^0-9.]/g,'')) - parseFloat(a[4].replace(/[^0-9.]/g,'')));
+                      openDrill(`Stock Value: ${cat}`, ['Item', 'Stock Qty', 'Selling Price', 'Cost Price', 'Total Retail Value', 'Total Cost Value'], rows);
+                    }}
+                  >
                   <XAxis
                     dataKey='label'
                     axisLine={false}
@@ -1287,14 +1352,14 @@ const Dashboard = () => {
                   />
                   <Bar
                     dataKey='retailValue'
-                    name='Retail Value'
+                    name='Selling Price'
                     fill='#0d9488'
                     radius={[6, 6, 0, 0]}
                     barSize={16}
                   />
                   <Bar
                     dataKey='costValue'
-                    name='Cost Value'
+                    name='Purchase Cost'
                     fill='#1e293b'
                     radius={[6, 6, 0, 0]}
                     barSize={16}
@@ -1311,7 +1376,7 @@ const Dashboard = () => {
           <div className='bg-white rounded-3xl shadow-sm overflow-hidden'>
             <div className='p-6 bg-slate-50/50 font-black text-slate-800 uppercase text-xs flex flex-wrap items-center justify-between gap-3'>
               <div className='flex items-center gap-2'>
-                <BarChart3 size={16} /> Reorder Recommendation Engine
+                <BarChart3 size={16} /> Restocking Suggestions
               </div>
               <div className='flex items-center gap-1 rounded-lg bg-white p-1 shadow-sm'>
                 {REORDER_RANGE_OPTIONS.map((option) => (
@@ -1337,8 +1402,8 @@ const Dashboard = () => {
                   <th className='px-6 py-4'>Product</th>
                   <th className='px-6 py-4'>Class</th>
                   <th className='px-6 py-4'>Avg Daily Sales</th>
-                  <th className='px-6 py-4'>Reorder Point</th>
-                  <th className='px-6 py-4 text-right'>Buy Signal</th>
+                  <th className='px-6 py-4'>Restock At</th>
+                  <th className='px-6 py-4 text-right'>Action Needed</th>
                 </tr>
               </thead>
               <tbody className='divide-y divide-slate-100'>
@@ -1361,7 +1426,7 @@ const Dashboard = () => {
                       <td className='px-6 py-4 font-mono text-slate-500'>
                         {item.reorderPoint}
                         <span className='ml-2 text-[9px] text-slate-400'>
-                          LT {REORDER_LEAD_TIME_DAYS}d
+                          Lead {REORDER_LEAD_TIME_DAYS}d
                         </span>
                       </td>
                       <td className='px-6 py-4 text-right'>
@@ -1386,7 +1451,7 @@ const Dashboard = () => {
 
         <div className='bg-white rounded-3xl shadow-lg shadow-rose-100 overflow-hidden'>
           <div className='p-6 bg-rose-50 font-black text-rose-800 uppercase text-xs flex items-center gap-2'>
-            <Flame size={16} className='text-rose-600' /> Stockout Monitor
+            <Flame size={16} className='text-rose-600' /> Items Almost Out of Stock
           </div>
           <div className='overflow-x-auto'>
           <table className='w-full text-left min-w-max'>
@@ -1394,7 +1459,7 @@ const Dashboard = () => {
               <tr className='bg-black text-white text-[10px] font-black uppercase'>
                 <th className='px-4 py-4'>Item</th>
                 <th className='px-4 py-4'>Qty</th>
-                <th className='px-4 py-4 text-right'>Runway</th>
+                <th className='px-4 py-4 text-right'>Days Left</th>
               </tr>
             </thead>
             <tbody className='divide-y divide-rose-50'>
@@ -1430,28 +1495,40 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className='bg-white p-6 rounded-3xl shadow-sm mb-8'>
+      <div
+        className='bg-white p-6 rounded-3xl shadow-sm mb-8 cursor-pointer hover:shadow-md transition-shadow'
+        onClick={() => {
+          const focusItem = reorderSignals[0] || filteredInventoryItems[0];
+          if (!focusItem) return;
+          const today = new Date(); today.setHours(0,0,0,0);
+          const start = new Date(today); start.setDate(today.getDate() - 29);
+          const actualByItem = {};
+          const projByItem = {};
+          salesItems.forEach(si => {
+            const d = toDate(si.sales_transactions?.created_at);
+            if (!d || d < start) return;
+            if ((si.sales_transactions?.status || '').toLowerCase() === 'cancelled') return;
+            actualByItem[si.product_id] = (actualByItem[si.product_id] || 0) + safeNumber(si.quantity);
+          });
+          filteredInventoryItems.forEach(item => {
+            const key = item.sku || item.name;
+            const avg = safeNumber(dailyDemandByItem[key]);
+            projByItem[item.id] = Math.round(avg * 30);
+          });
+          const rows = filteredInventoryItems.map(item => {
+            const actual = safeNumber(actualByItem[item.id]);
+            const proj = safeNumber(projByItem[item.id]);
+            const gap = proj - actual;
+            return [item.name, item.sku || '—', actual, proj, gap > 0 ? `+${gap} below forecast` : gap < 0 ? `${gap} above forecast` : 'On track'];
+          }).filter(r => r[2] > 0 || r[3] > 0).sort((a, b) => parseInt(b[4]) - parseInt(a[4]));
+          openDrill('30-Day Sales Forecast vs Actual', ['Item', 'SKU', 'Actual Sold', 'Projected', 'Forecast Gap'], rows);
+        }}
+      >
         <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
           <h3 className='font-black text-slate-800 uppercase text-xs flex items-center gap-2'>
-            <TrendingUp size={16} /> 30-Day Demand Forecast (Actual vs Projected)
+            <TrendingUp size={16} /> 30-Day Sales Forecast (All Items — Actual vs Projected)
           </h3>
-          <div className='flex items-center gap-2'>
-            <p className='text-[10px] font-bold uppercase text-slate-400'>
-              Focus SKU: {demandForecast.focusLabel}
-            </p>
-            <select
-              value={forecastSelectValue}
-              onChange={(e) => setSelectedForecastSkuId(e.target.value)}
-              className='rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black uppercase text-slate-600 outline-none'
-            >
-              <option value='auto'>Auto (Top Reorder Priority)</option>
-              {forecastSkuOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <p className='text-[10px] font-bold uppercase text-slate-400'>Daily Units Sold</p>
         </div>
 
         <div className='h-72 w-full'>
@@ -1474,13 +1551,13 @@ const Dashboard = () => {
                 tick={{ fontSize: 10, fontWeight: 700, fill: "#94a3b8" }}
               />
               <Tooltip
-                formatter={(value) => `${safeNumber(value).toFixed(1)} units`}
+                formatter={(value, name) => [`${safeNumber(value).toFixed(0)} units`, name]}
                 contentStyle={{ borderRadius: "12px", border: "none" }}
               />
               <Line
                 type='monotone'
                 dataKey='actual'
-                name='Actual Demand'
+                name='Actual Daily Sales'
                 stroke='#0f766e'
                 strokeWidth={2.5}
                 dot={false}
@@ -1488,9 +1565,9 @@ const Dashboard = () => {
               <Line
                 type='monotone'
                 dataKey='projected'
-                name='Projected Demand'
+                name='Projected Daily Target'
                 stroke='#f97316'
-                strokeWidth={2.5}
+                strokeWidth={2}
                 strokeDasharray='6 4'
                 dot={false}
               />
@@ -1502,7 +1579,7 @@ const Dashboard = () => {
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8'>
         <div className='bg-white p-6 rounded-3xl shadow-sm'>
           <h3 className='font-black text-slate-800 uppercase text-xs mb-5 flex items-center gap-2'>
-            <Package size={16} /> Sales Status Mix
+            <Package size={16} /> Sales Order Breakdown
           </h3>
           <div className='h-64 w-full'>
             <ResponsiveContainer width='100%' height='100%'>
@@ -1515,6 +1592,28 @@ const Dashboard = () => {
                   innerRadius={50}
                   paddingAngle={2}
                   stroke='none'
+                  style={{ cursor: 'pointer' }}
+                  onClick={(seg) => {
+                    if (!seg) return;
+                    const status = seg.name;
+                    const productQtys = {};
+                    salesItems.forEach(si => {
+                      const st = (si.sales_transactions?.status || '').toLowerCase();
+                      const d = toDate(si.sales_transactions?.created_at);
+                      if (!d || d < cutoffDate) return;
+                      const match =
+                        (status === 'Completed' && st === 'completed') ||
+                        (status === 'In Transit' && st === 'in transit') ||
+                        (status === 'Pending' && st !== 'completed' && st !== 'in transit');
+                      if (!match) return;
+                      productQtys[si.product_id] = (productQtys[si.product_id] || 0) + safeNumber(si.quantity);
+                    });
+                    const rows = Object.entries(productQtys).map(([pid, qty]) => {
+                      const inv = inventory.find(i => i.id === pid);
+                      return [inv?.name || pid, inv?.sku || '—', inv?.category || '—', qty];
+                    }).sort((a, b) => b[3] - a[3]);
+                    openDrill(`Items in ${status} Orders`, ['Item', 'SKU', 'Category', 'Qty'], rows);
+                  }}
                 >
                   <Cell fill='#f59e0b' />
                   <Cell fill='#3b82f6' />
@@ -1537,9 +1636,26 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className='bg-white p-6 rounded-3xl shadow-sm'>
+        <div
+          className='bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
+          onClick={() => {
+            const rows = filteredScheduling.map(s => {
+              const inv = inventory.find(i => i.id === s.product_id);
+              const eta = toDate(s.eta);
+              const today = new Date(); today.setHours(0,0,0,0);
+              const daysLeft = eta ? Math.floor((new Date(eta).setHours(0,0,0,0) - today) / 86400000) : null;
+              const daysLabel = daysLeft === null ? '—' : daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? 'Today' : `in ${daysLeft}d`;
+              return [inv?.name || s.product_id || '—', inv?.sku || '—', s.status || '—', s.eta ? new Date(s.eta).toLocaleDateString() : '—', daysLabel, safeNumber(s.quantity)];
+            }).sort((a, b) => {
+              const aD = a[4].includes('overdue') ? -9999 : parseInt(a[4]) || 0;
+              const bD = b[4].includes('overdue') ? -9999 : parseInt(b[4]) || 0;
+              return aD - bD;
+            });
+            openDrill('Incoming Deliveries Schedule', ['Item', 'SKU', 'Status', 'ETA', 'Arriving', 'Qty'], rows);
+          }}
+        >
           <h3 className='font-black text-slate-800 uppercase text-xs mb-5 flex items-center gap-2'>
-            <CalendarRange size={16} /> Inbound ETA Buckets
+            <CalendarRange size={16} /> Incoming Deliveries Schedule
           </h3>
           <div className='h-64 w-full'>
             <ResponsiveContainer width='100%' height='100%'>
@@ -1566,7 +1682,7 @@ const Dashboard = () => {
                 />
                 <Bar
                   dataKey='quantity'
-                  name='Inbound Quantity'
+                  name='Quantity Expected'
                   fill='#0ea5e9'
                   radius={[8, 8, 0, 0]}
                   barSize={30}
@@ -1576,9 +1692,15 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className='bg-white p-6 rounded-3xl shadow-sm'>
+        <div
+          className='bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
+          onClick={() => {
+            const rows = reorderSignals.map(item => [item.name, item.sku || '—', item.category || '—', safeNumber(item.availableStock), item.reorderQty, item.cls?.label || '—']);
+            openDrill('All Items Needing Restocking', ['Item', 'SKU', 'Category', 'Current Stock', 'Qty to Restock', 'Class'], rows);
+          }}
+        >
           <h3 className='font-black text-slate-800 uppercase text-xs mb-5 flex items-center gap-2'>
-            <BarChart3 size={16} /> Reorder Pressure Chart
+            <BarChart3 size={16} /> Items Needing Restocking
           </h3>
           <div className='h-64 w-full'>
             <ResponsiveContainer width='100%' height='100%'>
@@ -1602,14 +1724,14 @@ const Dashboard = () => {
                 <Tooltip contentStyle={{ borderRadius: "12px", border: "none" }} />
                 <Bar
                   dataKey='reorderQty'
-                  name='Reorder Qty'
+                  name='Qty to Restock'
                   fill='#f97316'
                   radius={[6, 6, 0, 0]}
                   barSize={18}
                 />
                 <Bar
                   dataKey='availableStock'
-                  name='Available Stock'
+                  name='Current Stock'
                   fill='#334155'
                   radius={[6, 6, 0, 0]}
                   barSize={18}
@@ -1620,9 +1742,38 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className='bg-white p-6 rounded-3xl shadow-sm'>
+      <div
+        className='bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
+        onClick={() => {
+          const pricingByProduct = {};
+          productPricing.forEach(r => {
+            if (!r.product_id) return;
+            pricingByProduct[r.product_id] = safeNumber(r.manual_retail_price) || safeNumber(r.suggested_srp);
+          });
+          const salesRevByProduct = {};
+          filteredSales.forEach(s => {
+            salesItems
+              .filter(si => si.product_id && toDate(si.sales_transactions?.created_at) >= cutoffDate)
+              .forEach(si => {
+                const price = safeNumber(pricingByProduct[si.product_id]);
+                salesRevByProduct[si.product_id] = (salesRevByProduct[si.product_id] || 0) + safeNumber(si.quantity) * price;
+              });
+          });
+          const itemMap = {};
+          filteredHistory.forEach(r => {
+            const key = r.name || r.sku || 'Unknown';
+            if (!itemMap[key]) itemMap[key] = { name: r.name || '—', sku: r.sku || '—', category: r.category || '—', value: 0 };
+            itemMap[key].value += safeNumber(r.total_value);
+          });
+          const rows = Object.values(itemMap)
+            .filter(i => i.value > 0)
+            .map(i => [i.name, i.sku, i.category, formatCurrency(i.value)])
+            .sort((a, b) => parseFloat(b[3].replace(/[^0-9.]/g,'')) - parseFloat(a[3].replace(/[^0-9.]/g,'')));
+          openDrill('Sales vs Stock Value — Items by Stock Value', ['Item', 'SKU', 'Category', 'Stock Value'], rows);
+        }}
+      >
         <h3 className='font-black text-slate-800 uppercase text-xs mb-6 flex items-center gap-2'>
-          <DollarSign size={16} /> Transaction Snapshot
+          <DollarSign size={16} /> Sales vs Stock Value Summary
         </h3>
         <div className='h-64 w-full'>
           <ResponsiveContainer width='100%' height='100%'>
@@ -1656,7 +1807,7 @@ const Dashboard = () => {
               />
               <Bar
                 dataKey='inventoryValue'
-                name='Inventory Value'
+                name='Stock Value'
                 fill='#3b82f6'
                 radius={[8, 8, 0, 0]}
                 barSize={24}
@@ -1666,17 +1817,72 @@ const Dashboard = () => {
         </div>
 
         <p className='mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-500'>
-          Completion Rate: {kpis.completionRate.toFixed(1)}% | Category Filter:{" "}
+          Completion Rate: {kpis.completionRate.toFixed(1)}% | Category:{" "}
           {selectedCategory}
         </p>
       </div>
+
+      {drillDown && (
+        <div
+          className='fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4'
+          onClick={closeDrill}
+        >
+          <div
+            className='bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col'
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className='flex items-center justify-between px-6 py-4 border-b border-slate-100'>
+              <h3 className='font-black uppercase text-sm text-slate-900 tracking-wide'>{drillDown.title}</h3>
+              <button
+                type='button'
+                onClick={closeDrill}
+                className='p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition'
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className='overflow-auto flex-1'>
+              <table className='w-full text-left text-xs'>
+                <thead>
+                  <tr className='bg-slate-50 text-[10px] font-black uppercase text-slate-500 sticky top-0'>
+                    {drillDown.headers.map((h) => (
+                      <th key={h} className='px-5 py-3 whitespace-nowrap'>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-slate-50'>
+                  {drillDown.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={drillDown.headers.length} className='px-5 py-10 text-center text-slate-400 font-bold uppercase text-[11px]'>
+                        No records found
+                      </td>
+                    </tr>
+                  ) : (
+                    drillDown.rows.map((row, i) => (
+                      <tr key={i} className='hover:bg-slate-50'>
+                        {row.map((cell, j) => (
+                          <td key={j} className='px-5 py-3 font-bold text-slate-700 whitespace-nowrap'>{cell ?? '—'}</td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className='px-6 py-3 border-t border-slate-100 text-[10px] font-black uppercase text-slate-400'>
+              {drillDown.rows.length} record{drillDown.rows.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };
 
-const StatCard = ({ label, value, icon, sub, trend, isAlert }) => (
+const StatCard = ({ label, value, icon, sub, trend, isAlert, onClick }) => (
   <div
-    className={`p-6 rounded-3xl border transition-all ${
+    onClick={onClick}
+    className={`p-6 rounded-3xl border transition-all ${onClick ? "cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-100" : ""} ${
       isAlert
         ? "bg-rose-50 border-rose-200 shadow-lg shadow-rose-100"
         : "bg-white border-slate-200 shadow-sm"

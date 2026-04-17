@@ -14,11 +14,14 @@ import {
   Minus,
   Filter,
   Info,
+  Mail,
+  FileText,
 } from "lucide-react";
 
 const Purchasing = () => {
   const data = usePurchasing();
   const [selectedSupplier, setSelectedSupplier] = useState("All");
+  const [quotationSupplier, setQuotationSupplier] = useState("All");
 
   // Delete item function
   const deleteItem = async (id) => {
@@ -38,6 +41,74 @@ const Purchasing = () => {
     }
   };
 
+  const handleQuotationRequest = () => {
+    const vendor = data.suppliers.find((s) => s.name === quotationSupplier);
+    const email = vendor?.email || "";
+    const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const subject = encodeURIComponent(`Request for Price Quotation — ${quotationSupplier} (${today})`);
+    const body = encodeURIComponent(
+      `Dear ${quotationSupplier} Sales Team,\n\n` +
+      `We hope this message finds you well.\n\n` +
+      `We are writing on behalf of STN to formally request an updated price quotation for your full product catalog. ` +
+      `As part of our procurement review process, we would like to obtain your latest pricing, available stock, and any applicable terms or promotions currently in effect.\n\n` +
+      `Kindly provide the following details for each item in your catalog:\n\n` +
+      `  • Product Name and SKU / Item Code\n` +
+      `  • Unit of Measurement\n` +
+      `  • Unit Price (exclusive and inclusive of VAT, if applicable)\n` +
+      `  • Minimum Order Quantity (MOQ)\n` +
+      `  • Lead Time / Estimated Delivery Date\n` +
+      `  • Payment Terms\n` +
+      `  • Any available discounts or promotional pricing\n\n` +
+      `We appreciate your continued partnership and look forward to your prompt response. ` +
+      `Please feel free to reach out should you require any further information from our end.\n\n` +
+      `Thank you very much.\n\n` +
+      `Warm regards,\n` +
+      `STN Procurement Team\n` +
+      `Date: ${today}`
+    );
+    window.open(
+      `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
+      "_blank"
+    );
+  };
+
+  const handleAvailedItemsQuotation = () => {
+    const vendor = data.suppliers.find((s) => s.name === quotationSupplier);
+    const email = vendor?.email || "";
+    const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const supplierItems = (data.allItems || data.items).filter((i) => i.supplier === quotationSupplier);
+    const subject = encodeURIComponent(`Request for Updated Pricing — Availed Items (${quotationSupplier}) — ${today}`);
+    const itemList = supplierItems
+      .map(
+        (item, idx) =>
+          `  ${idx + 1}. ${item.name}\n` +
+          `     SKU: ${item.sku || "N/A"} | Unit: ${item.unit || "—"} | Last Price: ₱${Number(item.price || 0).toLocaleString()}`
+      )
+      .join("\n");
+    const body = encodeURIComponent(
+      `Dear ${quotationSupplier} Sales Team,\n\n` +
+      `We hope this message finds you well.\n\n` +
+      `We are writing to request updated pricing for the following items that we currently source from your company. ` +
+      `Please provide your latest unit prices, lead times, and any applicable discounts or terms at your earliest convenience.\n\n` +
+      `Items for Re-quotation:\n\n` +
+      itemList +
+      `\n\nFor each item, kindly include:\n` +
+      `  • Updated Unit Price (VAT-exclusive and VAT-inclusive)\n` +
+      `  • Available Stock / Lead Time\n` +
+      `  • Minimum Order Quantity (MOQ)\n` +
+      `  • Payment Terms\n\n` +
+      `We value our ongoing partnership and look forward to your prompt response.\n\n` +
+      `Thank you very much.\n\n` +
+      `Warm regards,\n` +
+      `STN Procurement Team\n` +
+      `Date: ${today}`
+    );
+    window.open(
+      `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
+      "_blank"
+    );
+  };
+
   // Filter logic para sa Catalog
   const filteredCatalog = useMemo(() => {
     let list = data.items;
@@ -46,6 +117,14 @@ const Purchasing = () => {
     }
     return list;
   }, [data.items, selectedSupplier]);
+
+  // Unique supplier names from all items (for quotation dropdown)
+  const itemSuppliers = useMemo(() => {
+    const names = (data.allItems || data.items)
+      .map((i) => i.supplier)
+      .filter(Boolean);
+    return [...new Set(names)].sort();
+  }, [data.allItems, data.items]);
 
   // Logic para sa grouping na kailangan ng CheckoutView
   const groupedOrders = useMemo(() => {
@@ -223,6 +302,41 @@ const Purchasing = () => {
                   >
                     Checkout ({data.cart.length})
                   </button>
+                  {selectedSupplier !== "All" && (
+                    <button
+                      onClick={handleQuotationRequest}
+                      className='w-full mt-3 bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2'
+                    >
+                      <FileText size={14} /> Request Quotation
+                    </button>
+                  )}
+                  <div className='mt-4 border-t border-slate-100 pt-4'>
+                    <p className='text-[10px] font-black uppercase text-slate-400 mb-2'>Request Quotation</p>
+                    <select
+                      className='w-full px-3 py-2 text-xs font-black uppercase rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-sky-400 mb-2'
+                      value={quotationSupplier}
+                      onChange={(e) => setQuotationSupplier(e.target.value)}
+                    >
+                      <option value='All'>— Select Supplier —</option>
+                      {itemSuppliers.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                    <button
+                      disabled={quotationSupplier === "All"}
+                      onClick={handleQuotationRequest}
+                      className='w-full bg-sky-500 hover:bg-sky-600 disabled:opacity-30 disabled:hover:bg-sky-500 text-white py-3 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2'
+                    >
+                      <FileText size={14} /> Request Full Catalog
+                    </button>
+                    <button
+                      disabled={quotationSupplier === "All"}
+                      onClick={handleAvailedItemsQuotation}
+                      className='w-full mt-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-30 disabled:hover:bg-indigo-500 text-white py-3 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2'
+                    >
+                      <Mail size={14} /> Request Availed Items
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -576,7 +576,7 @@ const InvoiceView = ({ order, onBack }) => (
         <div className='flex justify-between items-start pb-4 mb-6 border-b-2 border-slate-200'>
           <div>
             <h1 className='text-4xl font-black uppercase italic leading-none'>
-              Sales Receipt
+              Billing Statement
             </h1>
             <p className='text-xs font-bold text-slate-600 mt-2'>
               {order.items.length} Item{order.items.length !== 1 ? 's' : ''}
@@ -587,7 +587,7 @@ const InvoiceView = ({ order, onBack }) => (
               Date: {order.date}
             </p>
             <p className='text-[10px] font-bold text-slate-600 uppercase'>
-              Receipt Summary
+              Billing Statement
             </p>
           </div>
         </div>

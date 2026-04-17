@@ -136,7 +136,7 @@ const CheckoutView = ({
                 <div className='flex justify-between items-start pb-4 mb-6'>
                   <div>
                     <h1 className='text-4xl font-black uppercase italic leading-none'>
-                      Purchase Quotation
+                      Purchase Order
                     </h1>
                     <p className='text-xs font-bold text-slate-500 mt-2'>
                       ID: {quoteIds[supName] || "QTN-0000"}

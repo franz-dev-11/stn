@@ -13,12 +13,15 @@ import {
   Tag,
   Mail,
   CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 
 const PurchaseHistory = () => {
   const [batches, setBatches] = useState([]);
   const [suppliers, setSuppliers] = useState([]); // Added to fetch vendor details
   const [expandedBatch, setExpandedBatch] = useState(null);
+  const [returnMode, setReturnMode] = useState({});
+  const [returnSelections, setReturnSelections] = useState({});
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -129,25 +132,46 @@ const PurchaseHistory = () => {
     }
   };
 
-  const handleGmailSend = (receiptGroup) => {
-    const vendor = suppliers.find(
-      (s) => s.name === receiptGroup.supplier,
-    );
+  const handleToggleReturnMode = (receiptId) => {
+    setReturnMode((prev) => ({ ...prev, [receiptId]: !prev[receiptId] }));
+    setReturnSelections((prev) => ({ ...prev, [receiptId]: {} }));
+  };
+
+  const handleSetReturnQty = (receiptId, itemId, qty, maxQty) => {
+    const parsed = Math.min(Math.max(0, parseInt(qty) || 0), maxQty);
+    setReturnSelections((prev) => ({
+      ...prev,
+      [receiptId]: { ...(prev[receiptId] || {}), [itemId]: parsed },
+    }));
+  };
+
+  const handleEmailReturn = (receipt) => {
+    const vendor = suppliers.find((s) => s.name === receipt.supplier);
     const email = vendor?.email || "";
-    const totalAmount = receiptGroup.totalAmount;
-    const subject = encodeURIComponent(`Inquiry: Receipt from ${receiptGroup.supplier}`);
+    const selections = returnSelections[receipt.id] || {};
+    const selectedItems = receipt.items
+      .map((item) => ({ item, returnQty: selections[item.id] || 0 }))
+      .filter(({ returnQty }) => returnQty > 0);
+    const subject = encodeURIComponent(
+      `Return Request: Order ${receipt.order_number} — ${receipt.supplier}`
+    );
     const body = encodeURIComponent(
-      `Dear ${receiptGroup.supplier}\n\n` +
-      `I hope you are having a productive week.\n\n` +
-      `We would like to proceed with the purchase of the following items. Please find the details of our order below based on the quoted total of ₱${totalAmount.toLocaleString()}\n` +
-      `Regarding Receipt items:\n\n` +
-      receiptGroup.items.map((item) => `• ${item.hardware_inventory?.name} (${item.quantity})`).join("\n") +
-      `\nTotal Amount: ₱${totalAmount.toLocaleString()}\n\n` +
-      `For further information, please see the breakdown of our requirements in the attached file.`
+      `Dear ${receipt.supplier},\n\n` +
+      `We are writing to formally request a return for the following item(s) from Order #${receipt.order_number} ` +
+      `dated ${new Date(receipt.date_ordered).toLocaleDateString()}:\n\n` +
+      selectedItems
+        .map(
+          ({ item, returnQty }) =>
+            `• ${item.hardware_inventory?.name} (SKU: ${item.hardware_inventory?.sku || "N/A"}) — Return Qty: ${returnQty} of ${item.quantity} × ₱${item.unit_cost?.toLocaleString()}`
+        )
+        .join("\n") +
+      `\n\nPlease advise on the return procedure and any applicable return authorization required.\n\n` +
+      `Thank you for your prompt attention to this matter.\n\n` +
+      `Best regards,\nSTN Procurement Team`
     );
     window.open(
       `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
-      "_blank",
+      "_blank"
     );
   };
 
@@ -335,15 +359,29 @@ const PurchaseHistory = () => {
                                         <CheckCircle2 size={14} /> Mark Received
                                       </button>
                                     )}
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleGmailSend(receipt);
-                                      }}
-                                      className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'
-                                    >
-                                      <Mail size={14} /> Email Vendor
-                                    </button>
+                                    {receipt.status !== 'Received' && (
+                                      <>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleToggleReturnMode(receipt.id); }}
+                                        className={`px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 transition-all ${
+                                          returnMode[receipt.id]
+                                            ? 'bg-rose-500 text-white hover:bg-rose-600'
+                                            : 'bg-[#FF6B6B] text-white hover:bg-[#ff5252]'
+                                        }`}
+                                      >
+                                        <RotateCcw size={14} />
+                                        {returnMode[receipt.id] ? 'Cancel Return' : 'Return Items'}
+                                      </button>
+                                      {returnMode[receipt.id] && Object.values(returnSelections[receipt.id] || {}).some((q) => q > 0) && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleEmailReturn(receipt); }}
+                                          className='bg-rose-600 text-white px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-rose-700 transition-all'
+                                        >
+                                          <Mail size={14} /> Email Return ({Object.values(returnSelections[receipt.id] || {}).filter((q) => q > 0).length})
+                                        </button>
+                                      )}
+                                      </>
+                                    )}
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -360,7 +398,7 @@ const PurchaseHistory = () => {
                                   <div className='flex justify-between items-start pb-4 mb-6 border-b-2 border-slate-200'>
                                     <div>
                                       <h1 className='text-4xl font-black uppercase italic leading-none'>
-                                        Quotation
+                                        Purchase Order
                                       </h1>
                                       <p className='text-xs font-bold text-slate-600 mt-2'>
                                         {receipt.items.length} Item{receipt.items.length !== 1 ? 's' : ''}
@@ -398,6 +436,7 @@ const PurchaseHistory = () => {
                                   <table className='w-full text-left mb-6'>
                                     <thead>
                                       <tr className='bg-black text-white text-[10px] uppercase font-black'>
+                                        {returnMode[receipt.id] && <th className='py-3 pl-3 w-8'></th>}
                                         <th className='py-3'>SKU</th>
                                         <th className='py-3'>Description</th>
                                         <th className='py-3 text-center'>
@@ -416,8 +455,31 @@ const PurchaseHistory = () => {
                                     </thead>
                                     <tbody>
                                       {receipt.items.map((item, idx) => (
-                                        <tr key={idx} className='border-b border-slate-100'>
-                                          <td className='py-4 text-[10px] font-mono font-bold text-slate-600'>
+                                        <tr
+                                          key={idx}
+                                          className={`border-b border-slate-100 transition-colors ${
+                                            returnMode[receipt.id] && (returnSelections[receipt.id]?.[item.id] || 0) > 0
+                                              ? 'bg-rose-50'
+                                              : ''
+                                          }`}
+                                        >
+                                          {returnMode[receipt.id] && (
+                                            <td className='py-4 px-4' onClick={(e) => e.stopPropagation()}>
+                                              <input
+                                                type='number'
+                                                min={0}
+                                                max={item.quantity}
+                                                value={returnSelections[receipt.id]?.[item.id] ?? ''}
+                                                placeholder='0'
+                                                onChange={(e) => handleSetReturnQty(receipt.id, item.id, e.target.value, item.quantity)}
+                                                className='w-14 px-2 py-1 text-xs font-black text-center border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent'
+                                              />
+                                              {item.quantity > 0 && (
+                                                <p className='text-[9px] text-slate-400 font-bold text-center mt-0.5'>of {item.quantity}</p>
+                                              )}
+                                            </td>
+                                          )}
+                                          <td className='py-4 px-4 text-[10px] font-mono font-bold text-slate-600'>
                                             #{item.hardware_inventory?.sku}
                                           </td>
                                           <td className='py-4 text-sm font-black uppercase'>
@@ -445,7 +507,7 @@ const PurchaseHistory = () => {
                                     <tfoot>
                                       <tr className='border-t-2 border-slate-200'>
                                         <td
-                                          colSpan='5'
+                                          colSpan={returnMode[receipt.id] ? 6 : 5}
                                           className='py-6 text-right text-sm font-black uppercase text-slate-600'
                                         >
                                           Receipt Total:
