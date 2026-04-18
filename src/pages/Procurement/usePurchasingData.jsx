@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
+import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
 
 export const usePurchasing = () => {
   const [view, setView] = useState("browse");
@@ -121,6 +122,24 @@ export const usePurchasing = () => {
           status: "Pending",
         }));
         await supabase.from("order_scheduling").insert(sched);
+
+        // Audit trail — one row per item in the PO
+        const user = getSessionUser();
+        const performedBy = getPerformedBy(user);
+        await insertAuditTrail(
+          products.map((p) => ({
+            action: "PROCUREMENT",
+            reference_number: poNum,
+            product_id: p.id,
+            item_name: p.name,
+            sku: p.sku || null,
+            supplier: supplierName,
+            quantity: p.quantity,
+            unit_cost: p.price,
+            total_amount: p.price * p.quantity,
+            performed_by: performedBy,
+          }))
+        );
       }
       alert("Success! Orders Finalized.");
       setCart([]);

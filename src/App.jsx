@@ -20,6 +20,8 @@ const UserManagement = lazy(() => import("./pages/UserManagement"));
 const AccountCreation = lazy(() => import("./pages/AccountCreation"));
 const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const BatchRecord = lazy(() => import("./pages/BatchRecord"));
+const ReturnRecords = lazy(() => import("./pages/ReturnRecords"));
+const AuditTrail = lazy(() => import("./pages/AuditTrail"));
 
 const AppLayout = ({ currentUser, mustChangePassword, setCurrentUser }) => {
   const [currentPage, setCurrentPage] = useState("Dashboard");
@@ -100,6 +102,7 @@ function App() {
     <Suspense fallback={null}>
       <Routes>
         {/* Routes */}
+        <Route path='/' element={<Navigate to='/dashboard' replace />} />
         <Route path='/batch/:batchRef' element={<BatchRecord />} />
 
         <Route
@@ -139,6 +142,8 @@ function App() {
 
           <Route path='/account-creation' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <AccountCreation />} />
           <Route path='/manage-users' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <UserManagement />} />
+          <Route path='/return-records' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <ReturnRecords />} />
+          <Route path='/audit-trail' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <AuditTrail />} />
         </Route>
 
         <Route path='*' element={<Navigate to='/login' replace />} />

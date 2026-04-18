@@ -27,11 +27,20 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
   );
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [ledgerDateFrom, setLedgerDateFrom] = useState("");
+  const [ledgerDateTo, setLedgerDateTo] = useState("");
+  const [batchDateFrom, setBatchDateFrom] = useState("");
+  const [batchDateTo, setBatchDateTo] = useState("");
+  const [archiveDateFrom, setArchiveDateFrom] = useState("");
+  const [archiveDateTo, setArchiveDateTo] = useState("");
   const [selectedPOForQR, setSelectedPOForQR] = useState("");
   const [poQRData, setPOQRData] = useState(null);
   const printTableRef = useRef(null);
+
+  const PAGE_SIZE = 10;
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [batchPage, setBatchPage] = useState(1);
+  const [archivePage, setArchivePage] = useState(1);
 
   useEffect(() => {
     fetchInventory();
@@ -181,7 +190,11 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
     const master = itemBatches[0].hardware_inventory;
     const matchName = name.toLowerCase().includes(search.toLowerCase());
     const matchCat = !category || master?.category === category;
-    return matchName && matchCat;
+    const batchDates = itemBatches.map(b => b.batch_date?.split('T')[0] || '');
+    const matchDate = (!ledgerDateFrom && !ledgerDateTo) || batchDates.some(d =>
+      (!ledgerDateFrom || d >= ledgerDateFrom) && (!ledgerDateTo || d <= ledgerDateTo)
+    );
+    return matchName && matchCat && matchDate;
   });
 
   const filteredBatchEntries = Object.entries(groupedByName).filter(([name, itemBatches]) => {
@@ -189,8 +202,8 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
     const matchName = name.toLowerCase().includes(search.toLowerCase());
     const matchCat = !category || master?.category === category;
     const batchDates = itemBatches.map(b => b.batch_date?.split('T')[0] || '');
-    const matchDate = (!dateFrom && !dateTo) || batchDates.some(d =>
-      (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)
+    const matchDate = (!batchDateFrom && !batchDateTo) || batchDates.some(d =>
+      (!batchDateFrom || d >= batchDateFrom) && (!batchDateTo || d <= batchDateTo)
     );
     return matchName && matchCat && matchDate;
   });
@@ -198,9 +211,35 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
   const filteredArchiveItems = archiveItems.filter((r) => {
     const matchName = r.name?.toLowerCase().includes(search.toLowerCase());
     const d = r.snapshot_date?.split('T')[0] || '';
-    const matchDate = (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
+    const matchDate = (!archiveDateFrom || d >= archiveDateFrom) && (!archiveDateTo || d <= archiveDateTo);
     return matchName && matchDate;
   });
+
+  const pagedLedger = filteredLedgerEntries.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE);
+  const pagedBatches = filteredBatchEntries.slice((batchPage - 1) * PAGE_SIZE, batchPage * PAGE_SIZE);
+  const pagedArchive = filteredArchiveItems.slice((archivePage - 1) * PAGE_SIZE, archivePage * PAGE_SIZE);
+
+  const PaginationBar = ({ page, setPage, total }) => {
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    if (totalPages <= 1) return null;
+    return (
+      <div className='flex items-center justify-between px-8 py-3 border-t border-slate-100'>
+        <p className='text-[10px] font-bold text-slate-400 uppercase'>
+          Page {page} of {totalPages} — {total} items
+        </p>
+        <div className='flex gap-2'>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+            className='p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-all'>
+            <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3'><path d='M15 18l-6-6 6-6'/></svg>
+          </button>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+            className='p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-all'>
+            <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3'><path d='M9 18l6-6-6-6'/></svg>
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const handleEndDay = async () => {
     if (
@@ -321,25 +360,13 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
           <option value=''>All Categories</option>
           {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <input
-          type='date'
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400'
-        />
-        <input
-          type='date'
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          className='py-3 px-4 rounded-2xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400'
-        />
       </div>
 
       {/* 1. DAILY MOVEMENT LEDGER */}
       <div className='mb-8 sm:mb-14'>
         <button
           onClick={() => setShowLedger((v) => !v)}
-          className='w-full text-left flex items-center gap-2 mb-5 group'
+          className='w-full text-left flex items-center gap-2 mb-3 group'
         >
           <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2'>
             <ArrowDownUp className='text-teal-600' size={24} /> Daily Movement Ledger
@@ -349,6 +376,18 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             className={`ml-auto text-slate-400 group-hover:text-teal-600 transition-transform duration-300 ${showLedger ? '' : '-rotate-90'}`}
           />
         </button>
+        <div className='flex gap-2 mb-4 no-print'>
+          <input type='date' value={ledgerDateFrom} onChange={(e) => { setLedgerDateFrom(e.target.value); setLedgerPage(1); }}
+            className='py-2 px-3 rounded-xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400' />
+          <input type='date' value={ledgerDateTo} onChange={(e) => { setLedgerDateTo(e.target.value); setLedgerPage(1); }}
+            className='py-2 px-3 rounded-xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400' />
+          {(ledgerDateFrom || ledgerDateTo) && (
+            <button onClick={() => { setLedgerDateFrom(''); setLedgerDateTo(''); }}
+              className='p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all'>
+              <X size={14} />
+            </button>
+          )}
+        </div>
         {showLedger && (
           <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
@@ -371,7 +410,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             </thead>
             <tbody className='divide-y-2 divide-slate-50'>
               {filteredLedgerEntries.length > 0 ? (
-                filteredLedgerEntries.map(([name, itemBatches]) => {
+                pagedLedger.map(([name, itemBatches]) => {
                   const master = itemBatches[0].hardware_inventory;
                   const opening =
                     (master.stock_balance || 0) -
@@ -426,6 +465,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             </tbody>
             </table>
             </div>
+            <PaginationBar page={ledgerPage} setPage={setLedgerPage} total={filteredLedgerEntries.length} />
           </div>
         )}
       </div>
@@ -459,7 +499,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
       <div className='mb-8 sm:mb-14'>
         <button
           onClick={() => setShowBatches((v) => !v)}
-          className='w-full text-left flex items-center gap-2 mb-5 group'
+          className='w-full text-left flex items-center gap-2 mb-3 group'
         >
           <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2'>
             <Package className='text-teal-600' size={24} /> Master Batch Records
@@ -469,6 +509,18 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             className={`ml-auto text-slate-400 group-hover:text-teal-600 transition-transform duration-300 ${showBatches ? '' : '-rotate-90'}`}
           />
         </button>
+        <div className='flex gap-2 mb-4 no-print'>
+          <input type='date' value={batchDateFrom} onChange={(e) => { setBatchDateFrom(e.target.value); setBatchPage(1); }}
+            className='py-2 px-3 rounded-xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400' />
+          <input type='date' value={batchDateTo} onChange={(e) => { setBatchDateTo(e.target.value); setBatchPage(1); }}
+            className='py-2 px-3 rounded-xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400' />
+          {(batchDateFrom || batchDateTo) && (
+            <button onClick={() => { setBatchDateFrom(''); setBatchDateTo(''); }}
+              className='p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all'>
+              <X size={14} />
+            </button>
+          )}
+        </div>
         {showBatches && (
           <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
@@ -484,7 +536,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             </thead>
             <tbody className='divide-y-2 divide-slate-50'>
               {filteredBatchEntries.length > 0 ? (
-                filteredBatchEntries.map(([itemName, itemBatches]) => (
+                pagedBatches.map(([itemName, itemBatches]) => (
                   <React.Fragment key={itemName}>
                     <tr
                       className='bg-slate-50/80 cursor-pointer'
@@ -582,6 +634,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             </tbody>
             </table>
             </div>
+            <PaginationBar page={batchPage} setPage={setBatchPage} total={filteredBatchEntries.length} />
           </div>
         )}
       </div>
@@ -590,7 +643,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
       <div className='no-print'>
         <button
           onClick={() => setShowArchive((v) => !v)}
-          className='w-full text-left flex items-center gap-2 mb-5 group'
+          className='w-full text-left flex items-center gap-2 mb-3 group'
         >
           <h2 className='text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2'>
             <Clock size={24} className='text-slate-400' /> Ledger History (EOD Snapshots)
@@ -600,6 +653,18 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             className={`ml-auto text-slate-400 group-hover:text-teal-600 transition-transform duration-300 ${showArchive ? '' : '-rotate-90'}`}
           />
         </button>
+        <div className='flex gap-2 mb-4'>
+          <input type='date' value={archiveDateFrom} onChange={(e) => { setArchiveDateFrom(e.target.value); setArchivePage(1); }}
+            className='py-2 px-3 rounded-xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400' />
+          <input type='date' value={archiveDateTo} onChange={(e) => { setArchiveDateTo(e.target.value); setArchivePage(1); }}
+            className='py-2 px-3 rounded-xl bg-white shadow-sm font-bold text-xs outline-none focus:ring-2 focus:ring-teal-400' />
+          {(archiveDateFrom || archiveDateTo) && (
+            <button onClick={() => { setArchiveDateFrom(''); setArchiveDateTo(''); }}
+              className='p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all'>
+              <X size={14} />
+            </button>
+          )}
+        </div>
         {showArchive && (
           <div className='bg-white rounded-4xl shadow-sm overflow-hidden'>
           <div className='overflow-x-auto'>
@@ -624,7 +689,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             </thead>
             <tbody className='divide-y-2 divide-slate-50'>
               {filteredArchiveItems.length > 0 ? (
-                filteredArchiveItems.map((record) => (
+                pagedArchive.map((record) => (
                   <tr
                     key={record.id}
                     className='text-xs hover:bg-slate-50 transition-colors'
@@ -665,6 +730,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
             </tbody>
           </table>
           </div>
+          <PaginationBar page={archivePage} setPage={setArchivePage} total={filteredArchiveItems.length} />
         </div>
         )}
       </div>

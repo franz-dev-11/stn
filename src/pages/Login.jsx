@@ -66,40 +66,48 @@ export default function Login({ setCurrentUser }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 w-full max-w-sm p-8">
-        <div className="flex justify-center mb-8">
-          <img src={stnLogo} alt="STN Logo" className="h-16 w-auto object-contain" />
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+      <div className="w-full max-w-4xl flex rounded-2xl overflow-hidden shadow-2xl min-h-[600px]">
+
+      {/* ── Left Panel ── */}
+      <div className="w-full md:w-[42%] bg-[#1b6b5c] flex flex-col justify-center px-10 py-14 relative overflow-hidden">
+
+        {/* Brand */}
+        <div className="mb-10 flex flex-col items-start">
+          <img src={stnLogo} alt="STN Logo" className="h-14 w-auto object-contain mb-3 brightness-0 invert opacity-90" />
         </div>
 
-        <h2 className="text-lg font-bold text-slate-800 text-center mb-1">Welcome back</h2>
-        <p className="text-xs text-slate-400 text-center mb-8">Sign in to continue</p>
+        <h2 className="text-2xl font-bold text-white mb-8 leading-snug">
+          Sign in to your account
+        </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Username</label>
+            <label className="block text-[13px] font-medium text-white/80 mb-1.5">
+              Username:
+            </label>
             <input
               type="text"
               name="username"
               value={form.username}
               onChange={handleChange}
-              placeholder="Enter username"
-              className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition"
+              className="w-full px-4 py-2.5 text-sm bg-white/95 border border-transparent rounded outline-none focus:ring-2 focus:ring-teal-300 transition placeholder:text-slate-400"
               autoComplete="username"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Password</label>
+            <label className="block text-[13px] font-medium text-white/80 mb-1.5">
+              Password:
+            </label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                placeholder="Enter password"
-                className="w-full px-3 py-2.5 pr-10 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition"
+                className="w-full px-4 py-2.5 pr-11 text-sm bg-white/95 border border-transparent rounded outline-none focus:ring-2 focus:ring-teal-300 transition placeholder:text-slate-400"
                 autoComplete="current-password"
               />
               <button
@@ -115,7 +123,7 @@ export default function Login({ setCurrentUser }) {
           </div>
 
           {error && (
-            <p className="text-xs text-rose-500 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">
+            <p className="text-xs text-red-200 bg-red-900/30 border border-red-500/30 rounded px-3 py-2">
               {error}
             </p>
           )}
@@ -123,11 +131,71 @@ export default function Login({ setCurrentUser }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 text-white font-semibold text-sm py-2.5 rounded-lg transition-all duration-200 mt-2"
+            className="w-full bg-[#2d8c79]/70 hover:bg-[#2d8c79] disabled:opacity-50 border border-white/20 text-white font-semibold text-sm py-2.5 rounded transition-all duration-200"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+      </div>
+
+      {/* ── Right Panel — Decorative ── */}
+      <div className="hidden md:flex md:flex-1 bg-white relative overflow-hidden items-center justify-center">
+
+        {/* Brush stroke layers */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Teal wide stroke — top right */}
+          <div
+            className="absolute bg-teal-400/30"
+            style={{ width: "200%", height: "38%", top: "-8%", right: "-40%", transform: "rotate(-18deg)", borderRadius: "40%" }}
+          />
+          {/* Dark teal stroke — top right overlap */}
+          <div
+            className="absolute bg-teal-700/20"
+            style={{ width: "160%", height: "22%", top: "0%", right: "-30%", transform: "rotate(-18deg)", borderRadius: "40%" }}
+          />
+          {/* Sage green stroke — upper left */}
+          <div
+            className="absolute bg-[#6b9e7e]/25"
+            style={{ width: "55%", height: "55%", top: "-15%", left: "-8%", transform: "rotate(-18deg)", borderRadius: "40%" }}
+          />
+          {/* Gray-olive stroke — middle right */}
+          <div
+            className="absolute bg-slate-400/15"
+            style={{ width: "70%", height: "30%", top: "32%", right: "-15%", transform: "rotate(-18deg)", borderRadius: "40%" }}
+          />
+          {/* Aqua stroke — center bottom */}
+          <div
+            className="absolute bg-cyan-300/35"
+            style={{ width: "190%", height: "42%", bottom: "-10%", left: "-40%", transform: "rotate(-18deg)", borderRadius: "40%" }}
+          />
+          {/* Teal bottom accent */}
+          <div
+            className="absolute bg-teal-600/20"
+            style={{ width: "140%", height: "20%", bottom: "4%", right: "-25%", transform: "rotate(-18deg)", borderRadius: "40%" }}
+          />
+          {/* Olive top-left accent */}
+          <div
+            className="absolute bg-[#8aab8a]/15"
+            style={{ width: "40%", height: "18%", top: "8%", left: "-5%", transform: "rotate(-18deg)", borderRadius: "40%" }}
+          />
+        </div>
+
+        {/* Center brand mark */}
+        <div className="relative z-10 flex flex-col items-center select-none">
+          <div className="w-36 h-36 bg-[#1b6b5c] rounded-2xl flex items-center justify-center shadow-2xl mb-6">
+            <img src={stnLogo} alt="STN" className="h-20 w-auto object-contain brightness-0 invert" />
+          </div>
+          <p className="text-[10px] font-bold tracking-[0.3em] text-slate-400 uppercase">Powered by STN</p>
+        </div>
+
+        {/* Bottom-right powered by */}
+        <div className="absolute bottom-5 right-6 z-10">
+          <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+            Powered by <span className="text-slate-600">STN</span>
+          </span>
+        </div>
+      </div>
+
       </div>
     </div>
   );

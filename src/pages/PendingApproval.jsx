@@ -15,7 +15,7 @@ const PendingApproval = ({ setCurrentUser }) => {
   return (
     <div className='min-h-screen bg-[#d8ece8] px-4 py-6 sm:px-6 lg:px-10'>
       <div className='mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-7xl overflow-visible rounded-2xl sm:rounded-[28px] bg-white shadow-[0_30px_80px_rgba(7,64,60,0.18)] lg:overflow-hidden'>
-        <section className='relative flex w-full flex-col justify-center bg-[#0d6f69] px-8 py-10 text-white sm:px-12 lg:w-[38%] lg:px-14'>
+        <div className='relative flex w-full flex-col justify-center bg-[#0d6f69] px-8 py-10 text-white sm:px-12 lg:w-[38%] lg:px-14'>
           <div className='absolute inset-y-0 right-0 hidden w-px bg-white/10 lg:block' />
 
           <div className='relative z-10 mx-auto flex w-full max-w-sm flex-col'>
@@ -69,9 +69,9 @@ const PendingApproval = ({ setCurrentUser }) => {
               </button>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section className='relative hidden overflow-hidden bg-[#f5fbfa] lg:flex lg:w-[62%] lg:items-center lg:justify-center'>
+        <div className='relative hidden overflow-hidden bg-[#f5fbfa] lg:flex lg:w-[62%] lg:items-center lg:justify-center'>
           <div className='absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(28,195,184,0.22),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(13,111,105,0.24),transparent_38%)]' />
           <div className='absolute -left-12 top-0 h-40 w-80 rotate-[-28deg] bg-[#0d6f69]' />
           <div className='absolute -left-6 top-12 h-24 w-72 rotate-[-28deg] bg-white/95' />
@@ -97,7 +97,7 @@ const PendingApproval = ({ setCurrentUser }) => {
               Your registration details are being verified by our Super Admin. We'll notify you as soon as your account is approved.
             </p>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );

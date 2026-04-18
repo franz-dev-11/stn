@@ -14,6 +14,7 @@ import {
   Mail,
   CheckCircle2,
   RotateCcw,
+  Save,
 } from "lucide-react";
 
 const PurchaseHistory = () => {
@@ -22,6 +23,7 @@ const PurchaseHistory = () => {
   const [expandedBatch, setExpandedBatch] = useState(null);
   const [returnMode, setReturnMode] = useState({});
   const [returnSelections, setReturnSelections] = useState({});
+  const [returnSaving, setReturnSaving] = useState({});
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -32,31 +34,30 @@ const PurchaseHistory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    const fetchData = async () => {
-      // Fetch all order items
-      const { data: orderData, error: orderError } = await supabase
-        .from("order_scheduling")
-        .select(
-          `
-          *,
-          hardware_inventory:product_id (
-            name,
-            sku,
-            unit,
-            supplier
-          )
-        `,
+  const fetchData = async () => {
+    const { data: orderData, error: orderError } = await supabase
+      .from("order_scheduling")
+      .select(
+        `
+        *,
+        hardware_inventory:product_id (
+          name,
+          sku,
+          unit,
+          supplier
         )
-        .order("date_ordered", { ascending: false });
+      `,
+      )
+      .order("date_ordered", { ascending: false });
 
-      // Fetch Suppliers for contact info
-      const { data: supData } = await supabase.from("suppliers").select("*");
+    const { data: supData } = await supabase.from("suppliers").select("*");
 
-      if (orderError) console.error("Error fetching data:", orderError);
-      setBatches(orderData || []);
-      setSuppliers(supData || []);
-    };
+    if (orderError) console.error("Error fetching data:", orderError);
+    setBatches(orderData || []);
+    setSuppliers(supData || []);
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -143,6 +144,105 @@ const PurchaseHistory = () => {
       ...prev,
       [receiptId]: { ...(prev[receiptId] || {}), [itemId]: parsed },
     }));
+  };
+
+  const handleSaveReturn = async (receipt) => {
+    const selections = returnSelections[receipt.id] || {};
+    const itemsToReturn = receipt.items
+      .map((item) => ({ item, returnQty: selections[item.id] || 0 }))
+      .filter(({ returnQty }) => returnQty > 0);
+
+    if (itemsToReturn.length === 0) {
+      alert("Please enter a return quantity for at least one item.");
+      return;
+    }
+
+    const confirmLines = itemsToReturn
+      .map(
+        ({ item, returnQty }) =>
+          `• ${item.hardware_inventory?.name}: return ${returnQty} of ${item.quantity}`,
+      )
+      .join("\n");
+
+    if (
+      !window.confirm(
+        `Confirm return for the following items?\n\n${confirmLines}\n\nThis will deduct the returned quantities from inventory.`,
+      )
+    )
+      return;
+
+    const sessionUser = (() => {
+      try { return JSON.parse(sessionStorage.getItem("stn_user") || "null"); } catch { return null; }
+    })();
+    const returnedBy = sessionUser
+      ? `${sessionUser.first_name || ""} ${sessionUser.last_name || ""}`.trim() || sessionUser.username
+      : "Unknown";
+
+    setReturnSaving((prev) => ({ ...prev, [receipt.id]: true }));
+    try {
+      for (const { item, returnQty } of itemsToReturn) {
+        const productId = item.product_id;
+        const orderNumber = item.order_number;
+
+        // 1. Decrement hardware_inventory stock_balance and inbound_qty
+        const { data: inv, error: invFetchErr } = await supabase
+          .from("hardware_inventory")
+          .select("stock_balance, inbound_qty")
+          .eq("id", productId)
+          .single();
+
+        if (invFetchErr) throw new Error(`Inventory fetch error: ${invFetchErr.message}`);
+
+        const { error: invUpdateErr } = await supabase
+          .from("hardware_inventory")
+          .update({
+            stock_balance: Math.max(0, Number(inv.stock_balance || 0) - returnQty),
+            inbound_qty: Math.max(0, Number(inv.inbound_qty || 0) - returnQty),
+          })
+          .eq("id", productId);
+
+        if (invUpdateErr) throw new Error(`Inventory update error: ${invUpdateErr.message}`);
+
+        // 2. Decrement inventory_batches current_stock for the matching batch
+        const batchNumber = `${orderNumber}-${productId}`;
+        const { data: batch } = await supabase
+          .from("inventory_batches")
+          .select("id, current_stock")
+          .eq("batch_number", batchNumber)
+          .maybeSingle();
+
+        if (batch) {
+          await supabase
+            .from("inventory_batches")
+            .update({
+              current_stock: Math.max(0, Number(batch.current_stock || 0) - returnQty),
+            })
+            .eq("id", batch.id);
+        }
+
+        // 3. Insert audit trail row
+        const { error: returnErr } = await supabase.from("return_records").insert([{
+          order_number: orderNumber,
+          product_id: productId,
+          item_name: item.hardware_inventory?.name || null,
+          sku: item.hardware_inventory?.sku || null,
+          supplier: receipt.supplier || null,
+          return_qty: returnQty,
+          unit_cost: item.unit_cost || null,
+          returned_by: returnedBy,
+        }]);
+        if (returnErr) throw new Error(`Audit insert error: ${returnErr.message}`);
+      }
+
+      setReturnMode((prev) => ({ ...prev, [receipt.id]: false }));
+      setReturnSelections((prev) => ({ ...prev, [receipt.id]: {} }));
+      alert("Return saved. Inventory has been updated.");
+      fetchData();
+    } catch (err) {
+      alert("Error saving return: " + err.message);
+    } finally {
+      setReturnSaving((prev) => ({ ...prev, [receipt.id]: false }));
+    }
   };
 
   const handleEmailReturn = (receipt) => {
@@ -359,7 +459,7 @@ const PurchaseHistory = () => {
                                         <CheckCircle2 size={14} /> Mark Received
                                       </button>
                                     )}
-                                    {receipt.status !== 'Received' && (
+                                    {(receipt.status === 'Arrived' || receipt.status === 'Received') && (
                                       <>
                                       <button
                                         onClick={(e) => { e.stopPropagation(); handleToggleReturnMode(receipt.id); }}
@@ -373,12 +473,21 @@ const PurchaseHistory = () => {
                                         {returnMode[receipt.id] ? 'Cancel Return' : 'Return Items'}
                                       </button>
                                       {returnMode[receipt.id] && Object.values(returnSelections[receipt.id] || {}).some((q) => q > 0) && (
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); handleEmailReturn(receipt); }}
-                                          className='bg-rose-600 text-white px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-rose-700 transition-all'
-                                        >
-                                          <Mail size={14} /> Email Return ({Object.values(returnSelections[receipt.id] || {}).filter((q) => q > 0).length})
-                                        </button>
+                                        <>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); handleSaveReturn(receipt); }}
+                                            disabled={returnSaving[receipt.id]}
+                                            className='bg-rose-600 text-white px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-rose-700 transition-all disabled:opacity-60'
+                                          >
+                                            <Save size={14} /> {returnSaving[receipt.id] ? 'Saving...' : `Save Return (${Object.values(returnSelections[receipt.id] || {}).filter((q) => q > 0).length})`}
+                                          </button>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); handleEmailReturn(receipt); }}
+                                            className='bg-slate-700 text-white px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-800 transition-all'
+                                          >
+                                            <Mail size={14} /> Email Vendor
+                                          </button>
+                                        </>
                                       )}
                                       </>
                                     )}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -125,6 +126,21 @@ const OutboundScheduling = () => {
               ledgerErr.message,
             );
           }
+
+          // Audit trail — stock dispatched outbound
+          const user = getSessionUser();
+          await insertAuditTrail([{
+            action: "STOCK_OUT",
+            reference_number: order.so_number,
+            product_id: item.product_id,
+            item_name: item.item_name,
+            sku: null,
+            supplier: null,
+            quantity: item.quantity,
+            unit_cost: item.unit_price || 0,
+            total_amount: (item.quantity || 0) * (item.unit_price || 0),
+            performed_by: getPerformedBy(user),
+          }]);
         }
 
         setShowSuccess(true);

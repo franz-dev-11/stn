@@ -14,6 +14,8 @@ import {
   LogOut,
   Menu,
   X,
+  RotateCcw,
+  ClipboardList,
 } from "lucide-react";
 import stnLogo from "../assets/stn logo.png";
 
@@ -100,6 +102,22 @@ const Sidebar = ({
           label: "Stockin Delivery",
           path: "/inbound",
         },
+        {
+          icon: <RotateCcw size={20} />,
+          label: "Return Records",
+          path: "/return-records",
+        },
+      ],
+    },
+    {
+      title: "REPORTS",
+      roles: ["Super Admin", "Admin"],
+      items: [
+        {
+          icon: <ClipboardList size={20} />,
+          label: "Audit Trail",
+          path: "/audit-trail",
+        },
       ],
     },
     {
@@ -125,7 +143,7 @@ const Sidebar = ({
     },
   ];
 
-  const visibleSections = menuSections.filter((s) => s.roles.includes(user.role));
+  const visibleSections = menuSections;
 
   const NavItem = ({ icon, label, path }) => {
     const isActive = location.pathname === path;

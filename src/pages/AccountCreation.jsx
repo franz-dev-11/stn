@@ -292,12 +292,11 @@ const BATCH_COLS = [
 ];
 
 const CSV_HEADERS = ["employee_id", "first_name", "middle_name", "last_name", "birthday", "role", "username", "password"];
+const CSV_REQUIRED = ["first_name", "last_name", "birthday"];
+const TEMPLATE_HEADERS = ["first_name", "middle_name", "last_name", "birthday"];
 
 function downloadTemplate() {
-  const rows = [
-    CSV_HEADERS.join(","),
-    ",Juan,Santos,Dela Cruz,1995-06-15,Staff,,",
-  ];
+  const rows = [TEMPLATE_HEADERS.join(",")];
   const blob = new Blob([rows.join("\n")], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -312,9 +311,9 @@ function parseCSV(text) {
   if (lines.length < 2) return { rows: [], error: "CSV has no data rows." };
 
   const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-  const missing = CSV_HEADERS.filter((h) => !headers.includes(h));
+  const missing = CSV_REQUIRED.filter((h) => !headers.includes(h));
   if (missing.length > 0) {
-    return { rows: [], error: `Missing columns: ${missing.join(", ")}` };
+    return { rows: [], error: `Missing required columns: ${missing.join(", ")}` };
   }
 
   const rows = lines.slice(1).map((line, i) => {

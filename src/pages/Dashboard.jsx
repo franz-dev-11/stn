@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabaseClient";
 import {
   Area,
@@ -22,6 +22,7 @@ import {
   Boxes,
   CalendarRange,
   DollarSign,
+  FileText,
   Filter,
   Flame,
   AlertTriangle,
@@ -85,8 +86,16 @@ const Dashboard = () => {
   const [reorderRange, setReorderRange] = useState(30);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [trendMode, setTrendMode] = useState("units");
+  const [reorderPage, setReorderPage] = useState(1);
+  const REORDER_PAGE_SIZE = 10;
 
   const [drillDown, setDrillDown] = useState(null);
+  const [reportHTML, setReportHTML] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
+  const reportIframeRef = useRef(null);
+  const [reportPickerOpen, setReportPickerOpen] = useState(false);
+  const [reportFrom, setReportFrom] = useState("");
+  const [reportTo, setReportTo] = useState("");
 
   const openDrill = (title, headers, rows) => setDrillDown({ title, headers, rows });
   const closeDrill = () => setDrillDown(null);
@@ -123,7 +132,7 @@ const Dashboard = () => {
         supabase
           .from("sales_items")
           .select(
-            "product_id, quantity, sales_transactions(created_at, status)",
+            "product_id, item_name, quantity, unit_price, sales_transactions(created_at, status)",
           ),
         supabase
           .from("sales_transactions")
@@ -404,7 +413,7 @@ const Dashboard = () => {
       const transactionStatus = transaction?.status;
 
       if (!productId || !transactionDate) return;
-      if (transactionStatus !== "Completed") return;
+      if ((transactionStatus || "").toLowerCase() === "cancelled") return;
       if (transactionDate < reorderCutoffDate) return;
 
       const dayKey = transactionDate.toISOString().slice(0, 10);
@@ -443,14 +452,18 @@ const Dashboard = () => {
         const safetyStock =
           SERVICE_LEVEL_Z * stdDev * Math.sqrt(REORDER_LEAD_TIME_DAYS);
         const computedRop = Math.ceil(leadTimeDemand + safetyStock);
-        const reorderPoint = Math.max(
-          computedRop,
-          safeNumber(item.min_stock_level),
-        );
-        const reorderQty = Math.max(
-          0,
-          reorderPoint - safeNumber(item.availableStock),
-        );
+        const minLevel = safeNumber(item.min_stock_level);
+        const reorderPoint = Math.max(computedRop, minLevel);
+        const availStock = safeNumber(item.availableStock);
+
+        // If no sales history, fall back to min_stock_level comparison;
+        // if min_stock_level also isn't set, use 10% of stock_balance as a soft floor
+        const effectiveFloor = minLevel > 0
+          ? minLevel
+          : Math.ceil(safeNumber(item.stock_balance) * 0.1);
+        const reorderQty = reorderPoint > 0
+          ? Math.max(0, reorderPoint - availStock)
+          : Math.max(0, effectiveFloor - availStock);
 
         let cls = { label: "C", color: "bg-slate-100 text-slate-700" };
         if (avgDailyDemand >= 10) {
@@ -465,13 +478,12 @@ const Dashboard = () => {
           salesStdDev: stdDev,
           leadTimeDemand,
           safetyStock,
-          reorderPoint,
+          reorderPoint: reorderPoint || effectiveFloor,
           reorderQty,
           cls,
         };
       })
-      .sort((a, b) => b.reorderQty - a.reorderQty)
-      .slice(0, 8);
+      .sort((a, b) => b.reorderQty - a.reorderQty);
 
     return rows;
   }, [filteredInventoryItems, salesItems, reorderCutoffDate, reorderRange]);
@@ -799,6 +811,542 @@ const Dashboard = () => {
     return { data: rows };
   }, [filteredInventoryItems, salesItems, dailyDemandByItem]);
 
+  const topSellingProducts = useMemo(() => {
+    const totals = {};
+    salesItems.forEach((row) => {
+      const tx = row.sales_transactions;
+      if ((tx?.status || "").toLowerCase() === "cancelled") return;
+      const key = row.product_id || row.item_name || "Unknown";
+      const cleanName = (row.item_name || key).replace(/\s*\(.*?\)\s*$/, "").trim();
+      if (!totals[key]) totals[key] = { name: cleanName, qty: 0, revenue: 0 };
+      totals[key].qty += safeNumber(row.quantity);
+      totals[key].revenue += safeNumber(row.quantity) * safeNumber(row.unit_price);
+    });
+    return Object.values(totals).sort((a, b) => b.qty - a.qty).slice(0, 5);
+  }, [salesItems]);
+
+  const generateReport = (fromStr, toStr) => {
+    const now = new Date();
+    const reportDate = now.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+    const reportTime = now.toLocaleTimeString("en-PH");
+
+    // ── Date range setup ──
+    const rFrom = fromStr ? new Date(fromStr + "T00:00:00") : null;
+    const rTo   = toStr   ? new Date(toStr   + "T23:59:59") : null;
+    const inRange = (dateVal) => {
+      const d = toDate(dateVal);
+      if (!d) return false;
+      return (!rFrom || d >= rFrom) && (!rTo || d <= rTo);
+    };
+    const rangeLabel = rFrom || rTo
+      ? [rFrom ? rFrom.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "Start",
+         rTo   ? rTo.toLocaleDateString("en-PH",   { year: "numeric", month: "short", day: "numeric" }) : "Today"].join(" – ")
+      : "All Time";
+
+    // ── Report-scoped filtered arrays ──
+    const rSales = salesTransactions.filter(r => inRange(r.created_at));
+    const rPO    = purchaseOrders.filter(r => inRange(r.created_at));
+    const rSched = orderScheduling.filter(r => inRange(r.date_ordered));
+
+    // ── Report-scoped KPIs ──
+    const rOnHand       = filteredInventoryItems.reduce((s, i) => s + safeNumber(i.availableStock), 0);
+    const rStockBal     = filteredInventoryItems.reduce((s, i) => s + safeNumber(i.stock_balance), 0);
+    const rRevenue      = rSales.reduce((s, r) => s + safeNumber(r.total_amount), 0);
+    const rSpend        = rPO.reduce((s, r) => s + safeNumber(r.total_amount), 0);
+    const rCompleted    = rSales.filter(r => (r.status || "").toLowerCase() === "completed").length;
+    const rCompRate     = rSales.length ? (rCompleted / rSales.length) * 100 : 0;
+    const rPendingInb   = rSched.filter(r => ["pending","in transit"].includes((r.status || "").toLowerCase())).length;
+    const rOpenSales    = rSales.filter(r => (r.status || "").toLowerCase() !== "completed").length;
+    const rOpenPO       = rPO.filter(r => { const st = (r.status || "").toLowerCase(); return st !== "completed" && st !== "received"; }).length;
+    const today0r = new Date(); today0r.setHours(0,0,0,0);
+    const rOverdue      = rSched.filter(r => { const st = (r.status || "").toLowerCase(); const eta = toDate(r.eta); if (!eta || !["pending","in transit"].includes(st)) return false; eta.setHours(0,0,0,0); return eta < today0r; }).length;
+    const rLowCoverage  = filteredInventoryItems.filter(i => { const avail = safeNumber(i.availableStock); const min = safeNumber(i.min_stock_level); const inb = safeNumber(pendingInboundByProduct[i.id]); return avail + inb <= min; }).length;
+
+    // ── Report-scoped order status by lane ──
+    const rStatusRows = [
+      { lane: "Sales",
+        pending:    rSales.filter(r => (r.status || "").toLowerCase() === "pending").length,
+        inProgress: rSales.filter(r => (r.status || "").toLowerCase() === "in transit").length,
+        done:       rSales.filter(r => (r.status || "").toLowerCase() === "completed").length },
+      { lane: "Inbound",
+        pending:    rSched.filter(r => (r.status || "").toLowerCase() === "pending").length,
+        inProgress: rSched.filter(r => (r.status || "").toLowerCase() === "in transit").length,
+        done:       rSched.filter(r => ["completed","arrived"].includes((r.status || "").toLowerCase())).length },
+      { lane: "Procurement",
+        pending:    rPO.filter(r => (r.status || "").toLowerCase() === "pending").length,
+        inProgress: rPO.filter(r => ["approved","in progress","processing"].includes((r.status || "").toLowerCase())).length,
+        done:       rPO.filter(r => ["completed","received"].includes((r.status || "").toLowerCase())).length },
+    ];
+
+    const esc = (v) => String(v ?? "—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const th = (txt, align = "left") => `<th style="text-align:${align}">${esc(txt)}</th>`;
+    const td = (txt, align = "left", style = "") => `<td style="text-align:${align};${style}">${txt ?? "—"}</td>`;
+    const badge = (txt, color) => `<span class="badge" style="background:${color}20;color:${color};border:1px solid ${color}40">${esc(txt)}</span>`;
+
+    const section = (num, title, subtitle, content) => `
+      <div class="section">
+        <div class="section-header">
+          <div class="section-num">${num}</div>
+          <div>
+            <div class="section-title">${title}</div>
+            ${subtitle ? `<div class="section-sub">${subtitle}</div>` : ""}
+          </div>
+        </div>
+        ${content}
+      </div>`;
+
+    const table = (headCols, bodyRows, emptyMsg = "No data available") => `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>${headCols.join("")}</tr></thead>
+          <tbody>${bodyRows || `<tr><td colspan="${headCols.length}" class="empty">${emptyMsg}</td></tr>`}</tbody>
+        </table>
+      </div>`;
+
+    const kpiGrid = (items) => `
+      <div class="kpi-grid">
+        ${items.map(([label, value, sub, color]) => `
+          <div class="kpi-card" style="border-top:3px solid ${color || "#0d9488"}">
+            <div class="kpi-label">${esc(label)}</div>
+            <div class="kpi-value" style="color:${color || "#0f172a"}">${esc(value)}</div>
+            ${sub ? `<div class="kpi-sub">${esc(sub)}</div>` : ""}
+          </div>`).join("")}
+      </div>`;
+
+    // ── SECTION 1: Executive Summary KPIs ──
+    const sec1 = kpiGrid([
+      ["Total Items on Hand",    rOnHand.toLocaleString(),           `Stock balance: ${rStockBal.toLocaleString()}`,    "#0d9488"],
+      ["Sales Revenue",          formatCurrency(rRevenue),           rangeLabel,                                        "#10b981"],
+      ["Procurement Spend",      formatCurrency(rSpend),             `${rPendingInb} pending inbound`,                  "#8b5cf6"],
+      ["Completion Rate",        `${rCompRate.toFixed(1)}%`,         `${rSales.length} total orders`,                   "#3b82f6"],
+      ["Open Sales Orders",      rOpenSales.toLocaleString(),        "Not yet completed",                               "#f59e0b"],
+      ["Open Purchase Orders",   rOpenPO.toLocaleString(),           "Pending or processing",                           "#f97316"],
+      ["Overdue Inbound",        rOverdue.toLocaleString(),          "Past ETA date",                                   "#ef4444"],
+      ["Stockout Risk Items",    kpis.risky.toLocaleString(),        "≤ 7 days runway (current)",                       "#dc2626"],
+      ["Low Stock Items",        kpis.lowStock.toLocaleString(),     "Below minimum level (current)",                   "#f59e0b"],
+      ["Items Below Safe Level", rLowCoverage.toLocaleString(),      "Including pending inbound",                       "#ef4444"],
+      ["Supplier Count",         erpOps.supplierCoverage.toLocaleString(), "Active suppliers on file",               "#64748b"],
+      ["Pending Approvals",      erpOps.pendingApprovals.toLocaleString(), "Awaiting account approval",              "#94a3b8"],
+    ]);
+
+    // ── SECTION 2: Full Inventory Listing ──
+    const pricingMap = {};
+    productPricing.forEach(r => {
+      pricingMap[r.product_id] = {
+        cost: safeNumber(r.supplier_cost),
+        retail: safeNumber(r.manual_retail_price) || safeNumber(r.suggested_srp),
+      };
+    });
+    const inventoryRows = [...filteredInventoryItems]
+      .sort((a, b) => (a.category || "").localeCompare(b.category || "") || (a.name || "").localeCompare(b.name || ""))
+      .map(item => {
+        const p = pricingMap[item.id] || { cost: 0, retail: 0 };
+        const stock = safeNumber(item.availableStock);
+        const minLvl = safeNumber(item.min_stock_level);
+        const statusTxt = stock <= 0 ? "Out of Stock" : stock <= minLvl ? "Low Stock" : "Healthy";
+        const statusColor = stock <= 0 ? "#ef4444" : stock <= minLvl ? "#f59e0b" : "#10b981";
+        return `<tr>
+          ${td(item.name)}
+          ${td(item.sku || "—", "left", "font-family:monospace;font-size:9.5px;color:#64748b")}
+          ${td(item.category || "—")}
+          ${td(stock, "right")}
+          ${td(minLvl || "—", "right")}
+          ${td(safeNumber(item.inbound_qty), "right", "color:#0d9488;font-weight:700")}
+          ${td(safeNumber(item.outbound_qty), "right", "color:#f97316;font-weight:700")}
+          ${td(safeNumber(item.stock_balance), "right", "font-weight:800")}
+          ${td(p.retail > 0 ? formatCurrency(p.retail) : "—", "right")}
+          ${td(p.retail > 0 ? formatCurrency(stock * p.retail) : "—", "right", "font-weight:800")}
+          <td style="text-align:center">${badge(statusTxt, statusColor)}</td>
+        </tr>`;
+      }).join("");
+    const totalRetailVal = filteredInventoryItems.reduce((s, item) => {
+      const p = pricingMap[item.id] || { retail: 0 };
+      return s + safeNumber(item.availableStock) * p.retail;
+    }, 0);
+    const sec2 = table(
+      [th("#", "center"), th("Item Name"), th("SKU"), th("Category"), th("Stock", "right"), th("Min Level", "right"), th("In (+)", "right"), th("Out (−)", "right"), th("Balance", "right"), th("Unit Price", "right"), th("Stock Value", "right"), th("Status", "center")].slice(1),
+      inventoryRows || "",
+      "No inventory data"
+    ) + `<div class="table-footer">Total Retail Inventory Value: <strong>${formatCurrency(totalRetailVal)}</strong> &nbsp;|&nbsp; ${filteredInventoryItems.length} SKUs listed</div>`;
+
+    // ── SECTION 3: Sales Transactions ──
+    const salesRows = [...rSales]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map((s, i) => {
+        const stColor = (s.status || "").toLowerCase() === "completed" ? "#10b981" : (s.status || "").toLowerCase() === "in transit" ? "#3b82f6" : "#f59e0b";
+        return `<tr>
+          ${td(i + 1, "center")}
+          ${td(new Date(s.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }))}
+          ${td(new Date(s.created_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" }))}
+          <td style="text-align:center">${badge(s.status || "Pending", stColor)}</td>
+          ${td(formatCurrency(s.total_amount), "right", "font-weight:800")}
+        </tr>`;
+      }).join("");
+    const totalSalesAmt = rSales.reduce((s, r) => s + safeNumber(r.total_amount), 0);
+    const completedSalesAmt = rSales.filter(r => (r.status || "").toLowerCase() === "completed").reduce((s, r) => s + safeNumber(r.total_amount), 0);
+    const sec3 = table(
+      [th("#", "center"), th("Date"), th("Time"), th("Status", "center"), th("Amount", "right")],
+      salesRows || "",
+      "No sales in selected period"
+    ) + `<div class="table-footer">Total: <strong>${formatCurrency(totalSalesAmt)}</strong> &nbsp;|&nbsp; Completed: <strong>${formatCurrency(completedSalesAmt)}</strong> &nbsp;|&nbsp; ${rSales.length} transactions &nbsp;|&nbsp; Completion rate: <strong>${rCompRate.toFixed(1)}%</strong></div>`;
+
+    // ── SECTION 4: Top Selling Products ──
+    const totalRevAll = topSellingProducts.reduce((s, p) => s + p.revenue, 0);
+    const topRows = topSellingProducts.map((p, i) => {
+      const pct = totalRevAll > 0 ? ((p.revenue / totalRevAll) * 100).toFixed(1) : "0.0";
+      return `<tr>
+        ${td(i + 1, "center")}
+        ${td(p.name)}
+        ${td(p.qty.toLocaleString(), "right", "font-weight:800")}
+        ${td(formatCurrency(p.revenue), "right", "font-weight:800")}
+        ${td(`${pct}%`, "right")}
+      </tr>`;
+    }).join("");
+    const sec4 = table(
+      [th("#", "center"), th("Product"), th("Units Sold", "right"), th("Revenue", "right"), th("% of Total", "right")],
+      topRows || "",
+      "No sales data in selected period"
+    ) + (topSellingProducts.length ? `<div class="table-footer">Combined Revenue: <strong>${formatCurrency(totalRevAll)}</strong></div>` : "");
+
+    // ── SECTION 5: Sales Items Detail ──
+    const itemSalesMap = {};
+    salesItems.forEach(row => {
+      const tx = row.sales_transactions;
+      if ((tx?.status || "").toLowerCase() === "cancelled") return;
+      if (!inRange(tx?.created_at)) return;
+      const key = row.product_id || row.item_name || "Unknown";
+      const cleanName = (row.item_name || key).replace(/\s*\(.*?\)\s*$/, "").trim();
+      if (!itemSalesMap[key]) itemSalesMap[key] = { name: cleanName, qty: 0, revenue: 0, txCount: 0 };
+      itemSalesMap[key].qty += safeNumber(row.quantity);
+      itemSalesMap[key].revenue += safeNumber(row.quantity) * safeNumber(row.unit_price);
+      itemSalesMap[key].txCount += 1;
+    });
+    const itemSalesRows = Object.values(itemSalesMap)
+      .sort((a, b) => b.qty - a.qty)
+      .map((p, i) => `<tr>
+        ${td(i + 1, "center")}
+        ${td(p.name)}
+        ${td(p.txCount, "right")}
+        ${td(p.qty.toLocaleString(), "right", "font-weight:800")}
+        ${td(formatCurrency(p.revenue), "right", "font-weight:800")}
+        ${td(p.qty > 0 ? formatCurrency(p.revenue / p.qty) : "—", "right")}
+      </tr>`).join("");
+    const sec5 = table(
+      [th("#", "center"), th("Product"), th("Transactions", "right"), th("Units Sold", "right"), th("Total Revenue", "right"), th("Avg Unit Price", "right")],
+      itemSalesRows || "",
+      "No item-level sales data in selected period"
+    ) + `<div class="table-footer">${Object.keys(itemSalesMap).length} products sold in this period</div>`;
+
+    // ── SECTION 6: Purchase Orders ──
+    const poRows = [...rPO]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map((p, i) => {
+        const stColor = ["completed","received"].includes((p.status || "").toLowerCase()) ? "#10b981" : ["approved","in progress","processing"].includes((p.status || "").toLowerCase()) ? "#3b82f6" : "#f59e0b";
+        return `<tr>
+          ${td(i + 1, "center")}
+          ${td(new Date(p.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }))}
+          ${td(esc(p.supplier_name) || "—")}
+          <td style="text-align:center">${badge(p.status || "Pending", stColor)}</td>
+          ${td(formatCurrency(p.total_amount), "right", "font-weight:800")}
+        </tr>`;
+      }).join("");
+    const totalPOAmt = rPO.reduce((s, r) => s + safeNumber(r.total_amount), 0);
+    const sec6 = table(
+      [th("#", "center"), th("Date"), th("Supplier"), th("Status", "center"), th("Amount", "right")],
+      poRows || "",
+      "No purchase orders in selected period"
+    ) + `<div class="table-footer">Total Procurement Spend: <strong>${formatCurrency(totalPOAmt)}</strong> &nbsp;|&nbsp; ${rPO.length} orders</div>`;
+
+    // ── SECTION 7: Inbound Scheduling ──
+    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+    const schedRows = [...rSched]
+      .sort((a, b) => {
+        const etaA = toDate(a.eta); const etaB = toDate(b.eta);
+        if (!etaA && !etaB) return 0;
+        if (!etaA) return 1;
+        if (!etaB) return -1;
+        return etaA - etaB;
+      })
+      .map((s, i) => {
+        const inv = inventory.find(item => item.id === s.product_id);
+        const eta = toDate(s.eta);
+        const daysLeft = eta ? Math.floor((new Date(eta).setHours(0,0,0,0) - today0.getTime()) / 86400000) : null;
+        const etaLabel = daysLeft === null ? "—" : daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `in ${daysLeft}d`;
+        const etaColor = daysLeft === null ? "#94a3b8" : daysLeft < 0 ? "#ef4444" : daysLeft <= 3 ? "#f59e0b" : "#10b981";
+        const stColor = (s.status || "").toLowerCase() === "arrived" ? "#10b981" : (s.status || "").toLowerCase() === "in transit" ? "#3b82f6" : "#f59e0b";
+        return `<tr>
+          ${td(i + 1, "center")}
+          ${td(esc(inv?.name) || s.product_id || "—")}
+          ${td(esc(inv?.sku) || "—", "left", "font-family:monospace;font-size:9.5px;color:#64748b")}
+          <td style="text-align:center">${badge(s.status || "Pending", stColor)}</td>
+          ${td(s.date_ordered ? new Date(s.date_ordered).toLocaleDateString("en-PH") : "—")}
+          ${td(eta ? eta.toLocaleDateString("en-PH") : "—")}
+          <td style="text-align:center;font-weight:700;color:${etaColor}">${etaLabel}</td>
+          ${td(safeNumber(s.quantity), "right", "font-weight:800")}
+        </tr>`;
+      }).join("");
+    const sec7 = table(
+      [th("#", "center"), th("Product"), th("SKU"), th("Status", "center"), th("Ordered"), th("ETA"), th("Arriving", "center"), th("Qty", "right")],
+      schedRows || "",
+      "No inbound orders in selected period"
+    ) + `<div class="table-footer">${rSched.length} scheduled orders &nbsp;|&nbsp; ${rOverdue} overdue</div>`;
+
+    // ── SECTION 8: Supplier Spend Analysis ──
+    const allSupplierSpend = Object.entries(
+      rPO.reduce((acc, row) => {
+        const key = row.supplier_name || "Unknown Supplier";
+        acc[key] = (acc[key] || 0) + safeNumber(row.total_amount);
+        return acc;
+      }, {})
+    ).sort((a, b) => b[1] - a[1]);
+    const supplierRows = allSupplierSpend.map(([ name, spend ], i) => {
+      const pct = totalPOAmt > 0 ? ((spend / totalPOAmt) * 100).toFixed(1) : "0.0";
+      return `<tr>
+        ${td(i + 1, "center")}
+        ${td(esc(name))}
+        ${td(formatCurrency(spend), "right", "font-weight:800")}
+        ${td(`${pct}%`, "right")}
+      </tr>`;
+    }).join("");
+    const sec8 = table(
+      [th("#", "center"), th("Supplier"), th("Total Spend", "right"), th("% of Total", "right")],
+      supplierRows || "",
+      "No supplier spend in selected period"
+    ) + (allSupplierSpend.length ? `<div class="table-footer">Total: <strong>${formatCurrency(totalPOAmt)}</strong> across ${allSupplierSpend.length} suppliers</div>` : "");
+
+    // ── SECTION 9: Full Reorder Intelligence ──
+    const reorderRows = reorderSignals.map((item, i) => {
+      const needsRestock = item.reorderQty > 0;
+      const clsColor = item.cls.label === "A" ? "#ef4444" : item.cls.label === "B" ? "#f59e0b" : "#64748b";
+      return `<tr style="${needsRestock ? "" : "color:#94a3b8"}">
+        ${td(i + 1, "center")}
+        ${td(esc(item.name))}
+        ${td(item.category || "—")}
+        <td style="text-align:center">${badge(item.cls.label, clsColor)}</td>
+        ${td(safeNumber(item.availableStock), "right")}
+        ${td(item.reorderPoint || "—", "right")}
+        ${td(item.avgDailyDemand.toFixed(2), "right")}
+        ${td(Math.ceil(safeNumber(item.safetyStock)), "right")}
+        ${td(needsRestock ? `<strong style="color:#f97316">+${item.reorderQty}</strong>` : `<span style="color:#10b981">✓ OK</span>`, "right")}
+      </tr>`;
+    }).join("");
+    const needRestockCount = reorderSignals.filter(i => i.reorderQty > 0).length;
+    const sec9 = table(
+      [th("#", "center"), th("Product"), th("Category"), th("Class", "center"), th("Stock", "right"), th("Reorder Point", "right"), th("Avg Daily Sales", "right"), th("Safety Stock", "right"), th("Action", "right")],
+      reorderRows || "",
+      "No items to analyze"
+    ) + `<div class="table-footer">${needRestockCount} items need restocking &nbsp;|&nbsp; ${reorderSignals.length - needRestockCount} items healthy</div>`;
+
+    // ── SECTION 10: Stockout Risk ──
+    const riskRows = stockoutRiskItems.map((item, i) => {
+      const urgencyColor = item.runwayDays <= 2 ? "#dc2626" : item.runwayDays <= 4 ? "#ef4444" : "#f59e0b";
+      return `<tr>
+        ${td(i + 1, "center")}
+        ${td(esc(item.name))}
+        ${td(item.category || "—")}
+        ${td(item.sku || "—", "left", "font-family:monospace;font-size:9.5px;color:#64748b")}
+        ${td(safeNumber(item.availableStock), "right")}
+        ${td(safeNumber(item.min_stock_level) || "—", "right")}
+        ${td(item.avgDailyDemand.toFixed(2), "right")}
+        <td style="text-align:center"><span style="font-weight:900;color:${urgencyColor}">${item.runwayDays.toFixed(1)} days</span></td>
+      </tr>`;
+    }).join("");
+    const sec10 = table(
+      [th("#", "center"), th("Product"), th("Category"), th("SKU"), th("Current Stock", "right"), th("Min Level", "right"), th("Avg Daily Sales", "right"), th("Runway", "center")],
+      riskRows || "",
+      "No urgent stockout risk in selected filters"
+    );
+
+    // ── SECTION 11: Stock Health + Category Value ──
+    const healthRows = inventorySegments.map(seg => {
+      const pct = filteredInventoryItems.length > 0 ? ((seg.value / filteredInventoryItems.length) * 100).toFixed(1) : "0.0";
+      const color = seg.name === "Healthy" ? "#10b981" : seg.name === "Low Stock" ? "#f59e0b" : seg.name === "Out of Stock" ? "#ef4444" : "#94a3b8";
+      return `<tr>
+        <td style="text-align:left"><span class="badge" style="background:${color}20;color:${color};border:1px solid ${color}40">${seg.name}</span></td>
+        ${td(seg.value, "right", "font-weight:800")}
+        ${td(`${pct}%`, "right")}
+      </tr>`;
+    }).join("");
+    const catValueRows = inventoryValueByCategory.map((row, i) => {
+      const margin = row.retailValue > 0 ? (((row.retailValue - row.costValue) / row.retailValue) * 100).toFixed(1) : "—";
+      return `<tr>
+        ${td(i + 1, "center")}
+        ${td(row.category)}
+        ${td(formatCurrency(row.retailValue), "right", "font-weight:800")}
+        ${td(formatCurrency(row.costValue), "right")}
+        ${td(row.retailValue > 0 ? formatCurrency(row.retailValue - row.costValue) : "—", "right", "color:#10b981;font-weight:700")}
+        ${td(margin !== "—" ? `${margin}%` : "—", "right")}
+      </tr>`;
+    }).join("");
+    const totalCatRetail = inventoryValueByCategory.reduce((s, r) => s + r.retailValue, 0);
+    const totalCatCost = inventoryValueByCategory.reduce((s, r) => s + r.costValue, 0);
+    const sec11a = table([th("Status"), th("Item Count", "right"), th("% of Total", "right")], healthRows, "No data");
+    const sec11b = table(
+      [th("#", "center"), th("Category"), th("Retail Value", "right"), th("Cost Value", "right"), th("Gross Profit", "right"), th("Margin %", "right")],
+      catValueRows || "",
+      "No category value data"
+    ) + `<div class="table-footer">Total Retail: <strong>${formatCurrency(totalCatRetail)}</strong> &nbsp;|&nbsp; Total Cost: <strong>${formatCurrency(totalCatCost)}</strong> &nbsp;|&nbsp; Gross Profit: <strong>${formatCurrency(totalCatRetail - totalCatCost)}</strong></div>`;
+
+    // ── SECTION 12: Order Status by Lane ──
+    const orderRows = rStatusRows.map(row => {
+      const total = row.pending + row.inProgress + row.done;
+      const donePct = total > 0 ? ((row.done / total) * 100).toFixed(0) : "0";
+      return `<tr>
+        ${td(row.lane, "left", "font-weight:800")}
+        ${td(row.pending, "right", "color:#f59e0b;font-weight:700")}
+        ${td(row.inProgress, "right", "color:#3b82f6;font-weight:700")}
+        ${td(row.done, "right", "color:#10b981;font-weight:700")}
+        ${td(total, "right", "font-weight:800")}
+        ${td(`${donePct}%`, "right")}
+      </tr>`;
+    }).join("");
+    const sec12 = table(
+      [th("Lane"), th("Pending", "right"), th("In Progress", "right"), th("Done", "right"), th("Total", "right"), th("Completion %", "right")],
+      orderRows, "No order data"
+    );
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>STN Detailed Report — ${reportDate}</title>
+  <style>
+    @page { size: A4 portrait; margin: 14mm 12mm; }
+    @page :first { margin-top: 10mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; font-size: 10.5px; background: #fff; }
+
+    /* ── COVER ── */
+    .cover { padding: 20px 0 18px; border-bottom: 3px solid #0d9488; margin-bottom: 24px; }
+    .cover-top { display: flex; align-items: flex-start; justify-content: space-between; }
+    .cover-logo { font-size: 28px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: #0f172a; line-height: 1; }
+    .cover-logo span { color: #0d9488; }
+    .cover-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: #64748b; margin-top: 4px; }
+    .cover-stamp { text-align: right; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #94a3b8; line-height: 1.8; }
+    .cover-stamp strong { color: #0d9488; font-size: 10px; }
+    .cover-meta { display: flex; gap: 0; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+    .cover-meta-item { flex: 1; padding: 8px 12px; border-right: 1px solid #e2e8f0; }
+    .cover-meta-item:last-child { border-right: none; }
+    .cover-meta-item .lbl { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; color: #94a3b8; margin-bottom: 2px; }
+    .cover-meta-item .val { font-size: 11px; font-weight: 800; color: #0f172a; }
+
+    /* ── SECTIONS ── */
+    .section { margin-bottom: 22px; page-break-inside: avoid; }
+    .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .section-num { width: 22px; height: 22px; background: #0d9488; color: white; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900; flex-shrink: 0; }
+    .section-title { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #0f172a; }
+    .section-sub { font-size: 9px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; }
+    .section-group-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #64748b; background: #f8fafc; padding: 4px 10px; margin: 10px 0 0; border-left: 2px solid #cbd5e1; }
+
+    /* ── KPI GRID ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .kpi-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; background: #fff; }
+    .kpi-label { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 4px; }
+    .kpi-value { font-size: 16px; font-weight: 900; line-height: 1; }
+    .kpi-sub { font-size: 8px; font-weight: 600; color: #94a3b8; margin-top: 4px; }
+
+    /* ── TABLES ── */
+    .table-wrap { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { background: #0f172a; color: #f8fafc; }
+    thead th { padding: 7px 10px; font-weight: 800; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.1em; white-space: nowrap; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody tr:hover { background: #f0fdfa; }
+    tbody td { padding: 5px 10px; font-weight: 600; border-bottom: 1px solid #f1f5f9; font-size: 10px; }
+    .empty { text-align: center; color: #94a3b8; font-weight: 700; text-transform: uppercase; font-size: 9px; padding: 16px; }
+    .table-footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 6px 12px; font-size: 9px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .table-footer strong { color: #0f172a; }
+
+    /* ── BADGES ── */
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+
+    /* ── PAGE BREAK ── */
+    .page-break { page-break-before: always; }
+
+    /* ── FOOTER ── */
+    .doc-footer { margin-top: 28px; border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .doc-footer-left { font-size: 8.5px; color: #94a3b8; font-weight: 700; text-transform: uppercase; line-height: 1.7; }
+    .doc-footer-right { font-size: 8.5px; color: #0d9488; font-weight: 800; text-transform: uppercase; text-align: right; line-height: 1.7; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+
+  <!-- COVER -->
+  <div class="cover">
+    <div class="cover-top">
+      <div>
+        <div class="cover-logo">STN <span>System</span></div>
+        <div class="cover-title">Detailed Operations Report</div>
+      </div>
+      <div class="cover-stamp">
+        <div>Generated: <strong>${reportDate}</strong></div>
+        <div>Time: <strong>${reportTime}</strong></div>
+        <div>Period: <strong>${rangeLabel}</strong></div>
+        <div>Category Filter: <strong>${selectedCategory}</strong></div>
+      </div>
+    </div>
+    <div class="cover-meta">
+      <div class="cover-meta-item"><div class="lbl">Total SKUs</div><div class="val">${filteredInventoryItems.length}</div></div>
+      <div class="cover-meta-item"><div class="lbl">Sales Revenue</div><div class="val">${formatCurrency(rRevenue)}</div></div>
+      <div class="cover-meta-item"><div class="lbl">Procurement Spend</div><div class="val">${formatCurrency(rSpend)}</div></div>
+      <div class="cover-meta-item"><div class="lbl">Completion Rate</div><div class="val">${rCompRate.toFixed(1)}%</div></div>
+      <div class="cover-meta-item"><div class="lbl">Stockout Risk</div><div class="val" style="color:#ef4444">${kpis.risky} items</div></div>
+    </div>
+  </div>
+
+  ${section("01", "Executive Summary", `Key performance indicators — ${rangeLabel}`, sec1)}
+  ${section("02", "Full Inventory Listing", `${filteredInventoryItems.length} SKUs · ${selectedCategory} · sorted by category`, sec2)}
+
+  <div class="page-break"></div>
+
+  ${section("03", "Sales Transactions", `${rSales.length} transactions in selected period`, sec3)}
+  ${section("04", "Top Selling Products", "Ranked by units sold — all time", sec4)}
+  ${section("05", "Sales by Product (Detail)", `Item-level breakdown — ${rangeLabel}`, sec5)}
+
+  <div class="page-break"></div>
+
+  ${section("06", "Purchase Orders", `${rPO.length} orders in selected period`, sec6)}
+  ${section("07", "Inbound Scheduling", `${rSched.length} scheduled orders — ${rOverdue} overdue`, sec7)}
+  ${section("08", "Supplier Spend Analysis", "All suppliers ranked by total spend", sec8)}
+
+  <div class="page-break"></div>
+
+  ${section("09", "Restocking Intelligence", `${needRestockCount} items need replenishment · ${reorderRange}-day demand basis (current)`, sec9)}
+  ${section("10", "Stockout Risk Alert", "Items with 7 days or less of remaining stock", sec10)}
+
+  <div class="page-break"></div>
+
+  ${section("11a", "Stock Health Overview", "By health status", sec11a)}
+  ${section("11b", "Inventory Value by Category", "Retail value, cost value, and margin breakdown", sec11b)}
+  ${section("12", "Order Status by Lane", "Across sales, inbound, and procurement", sec12)}
+
+  <div class="doc-footer">
+    <div class="doc-footer-left">
+      <div>STN Hardware Logistics System</div>
+      <div>Report covers last ${selectedRange} days · Filter: ${selectedCategory}</div>
+    </div>
+    <div class="doc-footer-right">
+      <div>Generated ${reportDate}</div>
+      <div>${reportTime}</div>
+    </div>
+  </div>
+
+</body>
+</html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;width:0;height:0;border:none;opacity:0;pointer-events:none";
+    document.body.appendChild(iframe);
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    iframe.contentWindow.focus();
+    setTimeout(() => {
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    }, 500);
+  };
+
   return (
     <main className='flex-1 p-3 sm:p-4 md:p-6 lg:p-8 bg-slate-50 min-h-screen font-sans overflow-x-hidden'>
       <header className='mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
@@ -844,6 +1392,14 @@ const Dashboard = () => {
               ))}
             </select>
           </div>
+
+          <button
+            type='button'
+            onClick={() => setReportPickerOpen(true)}
+            className='flex items-center gap-2 rounded-xl bg-teal-600 px-3 py-2 text-[10px] font-black uppercase text-white transition hover:bg-teal-700'
+          >
+            <FileText size={12} /> Generate Report
+          </button>
 
           <button
             type='button'
@@ -940,16 +1496,15 @@ const Dashboard = () => {
           )}
         />
         <StatCard
-          label='Late Deliveries'
-          value={erpOps.overdueInbound.toLocaleString()}
-          icon={<AlertTriangle className='text-orange-600' />}
-          sub='Expected but not yet arrived'
-          isAlert={erpOps.overdueInbound > 0}
-          onClick={() => {
-            const today = new Date(); today.setHours(0,0,0,0);
-            const rows = filteredScheduling.filter(r => { const st = (r.status||'').toLowerCase(); const eta = toDate(r.eta); if(!['pending','in transit'].includes(st)||!eta) return false; eta.setHours(0,0,0,0); return eta < today; });
-            openDrill('Late Deliveries', ['Product ID', 'Status', 'ETA', 'Qty'], rows.map(r => [r.product_id || '—', r.status || '—', r.eta ? new Date(r.eta).toLocaleDateString() : '—', safeNumber(r.quantity)]));
-          }}
+          label='Top Selling Product'
+          value={topSellingProducts[0]?.name ?? '—'}
+          icon={<Flame className='text-orange-500' />}
+          sub={topSellingProducts[0] ? `${topSellingProducts[0].qty.toLocaleString()} units sold · ${formatCurrency(topSellingProducts[0].revenue)}` : 'No sales data'}
+          onClick={() => openDrill(
+            'Top Selling Products',
+            ['Product', 'Units Sold', 'Revenue'],
+            topSellingProducts.map(p => [p.name, p.qty.toLocaleString(), formatCurrency(p.revenue)])
+          )}
         />
         <StatCard
           label='Accounts for Approval'
@@ -1377,22 +1932,25 @@ const Dashboard = () => {
             <div className='p-6 bg-slate-50/50 font-black text-slate-800 uppercase text-xs flex flex-wrap items-center justify-between gap-3'>
               <div className='flex items-center gap-2'>
                 <BarChart3 size={16} /> Restocking Suggestions
+                <span className='text-[9px] font-bold text-slate-400 normal-case'>({reorderSignals.length} items)</span>
               </div>
-              <div className='flex items-center gap-1 rounded-lg bg-white p-1 shadow-sm'>
-                {REORDER_RANGE_OPTIONS.map((option) => (
-                  <button
-                    key={option.days}
-                    type='button'
-                    onClick={() => setReorderRange(option.days)}
-                    className={`px-3 py-1 text-[10px] font-black uppercase rounded transition ${
-                      reorderRange === option.days
-                        ? "bg-slate-900 text-white"
-                        : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              <div className='flex items-center gap-2'>
+                <div className='flex items-center gap-1 rounded-lg bg-white p-1 shadow-sm'>
+                  {REORDER_RANGE_OPTIONS.map((option) => (
+                    <button
+                      key={option.days}
+                      type='button'
+                      onClick={() => { setReorderRange(option.days); setReorderPage(1); }}
+                      className={`px-3 py-1 text-[10px] font-black uppercase rounded transition ${
+                        reorderRange === option.days
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className='overflow-x-auto'>
@@ -1401,51 +1959,80 @@ const Dashboard = () => {
                 <tr className='bg-black text-white text-[10px] font-black uppercase'>
                   <th className='px-6 py-4'>Product</th>
                   <th className='px-6 py-4'>Class</th>
+                  <th className='px-6 py-4'>Stock</th>
                   <th className='px-6 py-4'>Avg Daily Sales</th>
                   <th className='px-6 py-4'>Restock At</th>
                   <th className='px-6 py-4 text-right'>Action Needed</th>
                 </tr>
               </thead>
               <tbody className='divide-y divide-slate-100'>
-                {reorderSignals.map((item) => {
-                  return (
-                    <tr key={item.id} className='hover:bg-slate-50/50 text-xs'>
-                      <td className='px-6 py-4 font-bold text-slate-800 uppercase'>
-                        {item.name}
-                      </td>
-                      <td className='px-6 py-4'>
-                        <span
-                          className={`px-2 py-1 rounded text-[10px] font-black uppercase ${item.cls.color}`}
-                        >
-                          {item.cls.label}
+                {reorderSignals.length === 0 ? (
+                  <tr>
+                    <td colSpan='6' className='px-6 py-10 text-center text-[11px] font-bold uppercase text-emerald-600'>
+                      All items are sufficiently stocked.
+                    </td>
+                  </tr>
+                ) : reorderSignals.slice((reorderPage - 1) * REORDER_PAGE_SIZE, reorderPage * REORDER_PAGE_SIZE).map((item) => (
+                  <tr key={item.id} className='hover:bg-slate-50/50 text-xs'>
+                    <td className='px-6 py-4 font-bold text-slate-800 uppercase'>
+                      {item.name}
+                    </td>
+                    <td className='px-6 py-4'>
+                      <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${item.cls.color}`}>
+                        {item.cls.label}
+                      </span>
+                    </td>
+                    <td className='px-6 py-4 font-mono font-bold text-slate-700'>
+                      {safeNumber(item.availableStock)}
+                    </td>
+                    <td className='px-6 py-4 font-mono text-slate-500'>
+                      {item.avgDailyDemand.toFixed(1)} / day
+                    </td>
+                    <td className='px-6 py-4 font-mono text-slate-500'>
+                      {item.reorderPoint}
+                      <span className='ml-2 text-[9px] text-slate-400'>
+                        Lead {REORDER_LEAD_TIME_DAYS}d
+                      </span>
+                    </td>
+                    <td className='px-6 py-4 text-right'>
+                      {item.reorderQty > 0 ? (
+                        <span className='bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-black text-[10px] animate-pulse'>
+                          REPLENISH: +{item.reorderQty}
                         </span>
-                      </td>
-                      <td className='px-6 py-4 font-mono text-slate-500'>
-                        {item.avgDailyDemand.toFixed(1)} / day
-                      </td>
-                      <td className='px-6 py-4 font-mono text-slate-500'>
-                        {item.reorderPoint}
-                        <span className='ml-2 text-[9px] text-slate-400'>
-                          Lead {REORDER_LEAD_TIME_DAYS}d
+                      ) : (
+                        <span className='text-emerald-500 font-black text-[10px] uppercase'>
+                          Healthy
                         </span>
-                      </td>
-                      <td className='px-6 py-4 text-right'>
-                        {item.reorderQty > 0 ? (
-                          <span className='bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-black text-[10px] animate-pulse'>
-                            REPLENISH: +{item.reorderQty}
-                          </span>
-                        ) : (
-                          <span className='text-emerald-500 font-black text-[10px] uppercase'>
-                            Healthy
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             </div>
+            {reorderSignals.length > REORDER_PAGE_SIZE && (
+              <div className='flex items-center justify-between px-6 py-3 border-t border-slate-100'>
+                <p className='text-[10px] font-bold text-slate-400 uppercase'>
+                  Page {reorderPage} of {Math.ceil(reorderSignals.length / REORDER_PAGE_SIZE)}
+                </p>
+                <div className='flex gap-2'>
+                  <button
+                    onClick={() => setReorderPage((p) => Math.max(1, p - 1))}
+                    disabled={reorderPage === 1}
+                    className='p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-all'
+                  >
+                    <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3'><path d='M15 18l-6-6 6-6'/></svg>
+                  </button>
+                  <button
+                    onClick={() => setReorderPage((p) => Math.min(Math.ceil(reorderSignals.length / REORDER_PAGE_SIZE), p + 1))}
+                    disabled={reorderPage === Math.ceil(reorderSignals.length / REORDER_PAGE_SIZE)}
+                    className='p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-all'
+                  >
+                    <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3'><path d='M9 18l6-6-6-6'/></svg>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1821,6 +2408,50 @@ const Dashboard = () => {
           {selectedCategory}
         </p>
       </div>
+
+      {reportPickerOpen && (
+        <div className='fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4' onClick={() => setReportPickerOpen(false)}>
+          <div className='bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8' onClick={e => e.stopPropagation()}>
+            <h3 className='font-black text-slate-900 uppercase text-sm tracking-wide mb-1'>Generate Report</h3>
+            <p className='text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-6'>Select date range for the report</p>
+            <div className='space-y-4 mb-6'>
+              <div>
+                <label className='block text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1.5'>From</label>
+                <input
+                  type='date'
+                  value={reportFrom}
+                  onChange={e => setReportFrom(e.target.value)}
+                  className='w-full py-3 px-4 rounded-2xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none focus:ring-2 focus:ring-teal-400'
+                />
+              </div>
+              <div>
+                <label className='block text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1.5'>To</label>
+                <input
+                  type='date'
+                  value={reportTo}
+                  onChange={e => setReportTo(e.target.value)}
+                  className='w-full py-3 px-4 rounded-2xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none focus:ring-2 focus:ring-teal-400'
+                />
+              </div>
+            </div>
+            <p className='text-[10px] font-bold text-slate-400 uppercase mb-4'>Leave blank to include all records</p>
+            <div className='flex gap-3'>
+              <button
+                onClick={() => { generateReport(reportFrom, reportTo); setReportPickerOpen(false); }}
+                className='flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all active:scale-95'
+              >
+                <FileText size={14} /> Print Report
+              </button>
+              <button
+                onClick={() => setReportPickerOpen(false)}
+                className='px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-black text-xs uppercase transition-all'
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {drillDown && (
         <div

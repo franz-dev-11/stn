@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
+import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
 import {
   Search,
   ShoppingCart,
@@ -210,6 +211,24 @@ const RecordSales = () => {
 
         if (stockErr) console.error("Stock update error:", stockErr);
       }
+
+      // Audit trail — one row per item sold
+      const user = getSessionUser();
+      const performedBy = getPerformedBy(user);
+      await insertAuditTrail(
+        cart.map((item) => ({
+          action: "SALE",
+          reference_number: soNum,
+          product_id: item.id,
+          item_name: item.name,
+          sku: item.sku || null,
+          supplier: item.supplier || null,
+          quantity: item.quantity,
+          unit_cost: item.displayPrice,
+          total_amount: item.quantity * item.displayPrice,
+          performed_by: performedBy,
+        }))
+      );
 
       setLastOrder({
         soNum,

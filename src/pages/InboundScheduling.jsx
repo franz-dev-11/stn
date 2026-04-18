@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -87,47 +88,72 @@ const InboundScheduling = () => {
 
         // IF ARRIVED: Record to Inventory and Batches
         if (isBecomingArrived) {
-          console.log("Status is Arrived. Updating Inventory and Batches...");
+          const batchNumber = `${orderNumber}-${orderData.product_id}`;
 
-          // Get current inventory
-          const { data: inv, error: invFetchErr } = await supabase
-            .from("hardware_inventory")
-            .select("stock_balance, inbound_qty, outbound_qty")
-            .eq("id", orderData.product_id)
-            .single();
-
-          if (invFetchErr)
-            throw new Error("Inventory Fetch Error: " + invFetchErr.message);
-
-          // Update Hardware Inventory Table
-          const { error: invUpdateErr } = await supabase
-            .from("hardware_inventory")
-            .update({
-              inbound_qty: Number(inv?.inbound_qty || 0) + Number(orderData.quantity),
-              stock_balance:
-                Number(inv?.stock_balance || 0) + Number(orderData.quantity),
-              outbound_qty: Number(inv?.outbound_qty || 0),
-            })
-            .eq("id", orderData.product_id);
-
-          if (invUpdateErr)
-            throw new Error("Inventory Update Error: " + invUpdateErr.message);
-
-          // Insert into inventory_batches
-          const { error: batchErr } = await supabase
+          // Guard: skip if this batch was already processed (prevents double-counting
+          // if status is changed away from Arrived then back again)
+          const { data: existingBatch } = await supabase
             .from("inventory_batches")
-            .insert([
-              {
-                product_id: orderData.product_id,
-                batch_number: `${orderNumber}-${orderData.product_id}`,
-                current_stock: orderData.quantity,
-                batch_date: new Date().toISOString(),
-                unit_cost: orderData.unit_cost || 0,
-              },
-            ]);
+            .select("id")
+            .eq("batch_number", batchNumber)
+            .maybeSingle();
 
-          if (batchErr)
-            throw new Error("Batch Insert Error: " + batchErr.message);
+          if (!existingBatch) {
+            // Get current inventory
+            const { data: inv, error: invFetchErr } = await supabase
+              .from("hardware_inventory")
+              .select("stock_balance, inbound_qty, outbound_qty")
+              .eq("id", orderData.product_id)
+              .single();
+
+            if (invFetchErr)
+              throw new Error("Inventory Fetch Error: " + invFetchErr.message);
+
+            // Update Hardware Inventory Table
+            const { error: invUpdateErr } = await supabase
+              .from("hardware_inventory")
+              .update({
+                inbound_qty: Number(inv?.inbound_qty || 0) + Number(orderData.quantity),
+                stock_balance:
+                  Number(inv?.stock_balance || 0) + Number(orderData.quantity),
+                outbound_qty: Number(inv?.outbound_qty || 0),
+              })
+              .eq("id", orderData.product_id);
+
+            if (invUpdateErr)
+              throw new Error("Inventory Update Error: " + invUpdateErr.message);
+
+            // Insert into inventory_batches
+            const { error: batchErr } = await supabase
+              .from("inventory_batches")
+              .insert([
+                {
+                  product_id: orderData.product_id,
+                  batch_number: batchNumber,
+                  current_stock: orderData.quantity,
+                  batch_date: new Date().toISOString(),
+                  unit_cost: orderData.unit_cost || 0,
+                },
+              ]);
+
+            if (batchErr)
+              throw new Error("Batch Insert Error: " + batchErr.message);
+
+            // Audit trail — stock received into inventory
+            const user = getSessionUser();
+            await insertAuditTrail([{
+              action: "STOCK_IN",
+              reference_number: orderNumber,
+              product_id: orderData.product_id,
+              item_name: orderData.item_name,
+              sku: null,
+              supplier: orderData.supplier || null,
+              quantity: orderData.quantity,
+              unit_cost: orderData.unit_cost || 0,
+              total_amount: (orderData.quantity || 0) * (orderData.unit_cost || 0),
+              performed_by: getPerformedBy(user),
+            }]);
+          }
         }
       }
 
