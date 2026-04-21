@@ -92,7 +92,8 @@ function App() {
       });
   }, []);
 
-  const userRole = currentUser?.role ?? null;
+  const rawRole = currentUser?.role ?? null;
+  const userRole = rawRole === "Staff" ? "Cashier" : rawRole;
 
   // --- STATES FOR QR SYSTEM NAVIGATION ---
   const [inventoryView, setInventoryView] = useState("Inventory");
@@ -113,24 +114,7 @@ function App() {
 
         <Route element={<AppLayout currentUser={currentUser} mustChangePassword={currentUser?.must_change_password === true} setCurrentUser={setCurrentUser} />}>
 
-          <Route path='/dashboard' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <Dashboard />} />
-          <Route path='/inventory' element={userRole === "Staff" ? <Navigate to='/pos' replace /> :
-              inventoryView === "Item Action" ? (
-                <ItemAction po_number={selectedPO} setCurrentPage={setInventoryView} />
-              ) : (
-                <Inventory setSelectedPO={setSelectedPO} setCurrentPage={setInventoryView} />
-              )
-            }
-          />
-
-          <Route path='/pricing' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <Pricing />} />
-          <Route path='/purchasing' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <Purchasing />} />
-          <Route path='/purchase-history' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <PurchaseHistory />} />
-          <Route path='/inbound' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <InboundDelivery />} />
-          <Route path='/pos' element={<RecordSales />} />
-          <Route path='/invoice-history' element={<InvoiceHistory />} />
-          <Route path='/outbound' element={<OutboundDelivery />} />
-          <Route path='/dashboard' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <Dashboard />} />
+          <Route path='/dashboard' element={(userRole === "Cashier" || userRole === "Stockman") ? <Navigate to='/purchasing' replace /> : <Dashboard />} />
           <Route path='/inventory' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> :
               inventoryView === "Item Action" ? (
                 <ItemAction po_number={selectedPO} setCurrentPage={setInventoryView} />
@@ -140,10 +124,18 @@ function App() {
             }
           />
 
-          <Route path='/account-creation' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <AccountCreation />} />
-          <Route path='/manage-users' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <UserManagement />} />
+          <Route path='/pricing' element={(userRole === "Cashier" || userRole === "Stockman") ? <Navigate to='/purchasing' replace /> : <Pricing />} />
+          <Route path='/purchasing' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <Purchasing />} />
+          <Route path='/purchase-history' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <PurchaseHistory />} />
+          <Route path='/inbound' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <InboundDelivery />} />
+          <Route path='/pos' element={userRole === "Stockman" ? <Navigate to='/purchasing' replace /> : <RecordSales />} />
+          <Route path='/invoice-history' element={userRole === "Stockman" ? <Navigate to='/purchasing' replace /> : <InvoiceHistory />} />
+          <Route path='/outbound' element={userRole === "Stockman" ? <Navigate to='/purchasing' replace /> : <OutboundDelivery />} />
+
+          <Route path='/account-creation' element={(userRole === "Cashier" || userRole === "Stockman") ? <Navigate to='/purchasing' replace /> : <AccountCreation />} />
+          <Route path='/manage-users' element={(userRole === "Cashier" || userRole === "Stockman") ? <Navigate to='/purchasing' replace /> : <UserManagement />} />
           <Route path='/return-records' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <ReturnRecords />} />
-          <Route path='/audit-trail' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <AuditTrail />} />
+          <Route path='/audit-trail' element={(userRole === "Cashier" || userRole === "Stockman") ? <Navigate to='/purchasing' replace /> : <AuditTrail />} />
         </Route>
 
         <Route path='*' element={<Navigate to='/login' replace />} />

@@ -290,9 +290,6 @@ const InvoiceHistory = () => {
                                       <p className='text-xs font-medium text-slate-600'>
                                         Taguig, 1630 Kalakhang Maynila
                                       </p>
-                                      <p className='text-[10px] font-bold text-slate-500 mt-1'>
-                                        Ref: {inv.so_number}
-                                      </p>
                                     </div>
                                   </div>
                                   <table className='w-full text-left mb-6'>
@@ -308,7 +305,7 @@ const InvoiceHistory = () => {
                                       {inv.sales_items?.map((item) => (
                                         <tr key={item.id} className='border-b border-slate-100'>
                                           <td className='py-4 text-sm font-black uppercase'>
-                                            {item.item_name}
+                                            {(item.item_name || "").replace(/\s*\(PO-[^)]+\)/gi, "").trim()}
                                           </td>
                                           <td className='py-4 text-center font-black'>
                                             {item.quantity}

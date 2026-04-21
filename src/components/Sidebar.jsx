@@ -34,9 +34,11 @@ const Sidebar = ({
       const stored = sessionStorage.getItem("stn_user");
       if (stored) {
         const u = JSON.parse(stored);
+        const rawRole = u.role || "Cashier";
+        const role = rawRole === "Staff" ? "Cashier" : rawRole;
         return {
           name: `${u.first_name} ${u.last_name}`.trim() || u.username || "User",
-          role: u.role || "Cashier",
+          role,
           initial: (u.first_name || u.username || "U").charAt(0).toUpperCase(),
         };
       }
@@ -85,8 +87,15 @@ const Sidebar = ({
       ],
     },
     {
+      title: "INVENTORY",
+      roles: ["Stockman"],
+      items: [
+        { icon: <Package size={20} />, label: "Inventory", path: "/inventory" },
+      ],
+    },
+    {
       title: "STOCKIN",
-      roles: ["Super Admin", "Admin"],
+      roles: ["Super Admin", "Admin", "Stockman"],
       items: [
         {
           icon: <ShoppingCart size={20} />,
@@ -123,7 +132,7 @@ const Sidebar = ({
     },
     {
       title: "STOCKOUT",
-      roles: ["Super Admin", "Admin", "Cashier", "Stockman"],
+      roles: ["Super Admin", "Admin", "Cashier"],
       items: [
         {
           icon: <Calculator size={20} />,
@@ -144,7 +153,7 @@ const Sidebar = ({
     },
   ];
 
-  const visibleSections = menuSections;
+  const visibleSections = menuSections.filter((s) => s.roles.includes(user.role));
 
   const NavItem = ({ icon, label, path }) => {
     const isActive = location.pathname === path;

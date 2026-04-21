@@ -6,6 +6,8 @@ import {
   Truck,
   Calculator,
   RotateCcw,
+  RefreshCw,
+  Banknote,
   ChevronLeft,
   ChevronRight,
   Filter,
@@ -37,6 +39,16 @@ const ACTION_META = {
     label: "Return",
     icon: <RotateCcw size={12} />,
     color: "bg-rose-100 text-rose-700",
+  },
+  REPLACED: {
+    label: "Replaced",
+    icon: <RefreshCw size={12} />,
+    color: "bg-violet-100 text-violet-700",
+  },
+  REFUNDED: {
+    label: "Refunded",
+    icon: <Banknote size={12} />,
+    color: "bg-amber-100 text-amber-700",
   },
 };
 
@@ -168,6 +180,8 @@ const AuditTrail = () => {
             <option value="SALE">Sale</option>
             <option value="STOCK_OUT">Stock-Out</option>
             <option value="RETURN">Return</option>
+            <option value="REPLACED">Replaced</option>
+            <option value="REFUNDED">Refunded</option>
           </select>
         </div>
         <div className="flex items-center gap-2 shrink-0">

@@ -189,7 +189,7 @@ const RecordSales = () => {
       const itemRows = cart.map((item) => ({
         transaction_id: txData.id,
         product_id: item.id,
-        item_name: `${item.name} (${item.activeBatch.batch_number})`,
+        item_name: item.name,
         quantity: item.quantity,
         unit_price: item.displayPrice,
       }));

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
+import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 import {
   RotateCcw,
   Search,
@@ -77,6 +78,25 @@ const ReturnRecords = () => {
         }
       }
 
+      if (status === "refunded") {
+        // Deduct refund value from the purchase order total
+        const refundValue = (record.return_qty || 0) * (record.unit_cost || 0);
+        if (refundValue > 0) {
+          const { data: po } = await supabase
+            .from("purchase_orders")
+            .select("id, total_amount")
+            .eq("po_number", record.order_number)
+            .maybeSingle();
+
+          if (po) {
+            await supabase
+              .from("purchase_orders")
+              .update({ total_amount: Math.max(0, Number(po.total_amount || 0) - refundValue) })
+              .eq("id", po.id);
+          }
+        }
+      }
+
       // 3. Update resolution_status on the return record
       const { error: statusErr } = await supabase
         .from("return_records")
@@ -87,6 +107,20 @@ const ReturnRecords = () => {
       setRecords((prev) =>
         prev.map((r) => (r.id === record.id ? { ...r, resolution_status: status } : r))
       );
+
+      const user = getSessionUser();
+      await insertAuditTrail([{
+        action: status === "replaced" ? "REPLACED" : "REFUNDED",
+        reference_number: record.order_number,
+        product_id: record.product_id,
+        item_name: record.item_name,
+        sku: record.sku || null,
+        supplier: record.supplier || null,
+        quantity: record.return_qty,
+        unit_cost: record.unit_cost || 0,
+        total_amount: (record.return_qty || 0) * (record.unit_cost || 0),
+        performed_by: getPerformedBy(user),
+      }]);
     } catch (err) {
       console.error("Error processing resolution:", err.message);
       alert("Error: " + err.message);
