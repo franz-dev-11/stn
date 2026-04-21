@@ -157,20 +157,29 @@ const BatchRecord = () => {
             </div>
           </div>
 
-          {/* Stock Quantity */}
-          {currentStock != null && (
-            <div className="flex items-start gap-3">
-              <Package size={16} className="text-teal-500 mt-0.5 shrink-0" />
-              <div>
+          {/* Order Qty & Stock Quantity */}
+          <div className="flex gap-4">
+            {items[0]?.quantity != null && (
+              <div className="flex-1 bg-slate-50 rounded-2xl px-4 py-3">
                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  Stock Quantity
+                  Order Qty
                 </p>
-                <p className="text-sm font-black text-emerald-600 uppercase mt-0.5">
+                <p className="text-xl font-black text-slate-800 mt-0.5">
+                  {items[0].quantity}
+                </p>
+              </div>
+            )}
+            {currentStock != null && (
+              <div className="flex-1 bg-emerald-50 rounded-2xl px-4 py-3">
+                <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">
+                  Stock Qty
+                </p>
+                <p className="text-xl font-black text-emerald-600 mt-0.5">
                   {currentStock}
                 </p>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="px-8 pb-6 text-center">
