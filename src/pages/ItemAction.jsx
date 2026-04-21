@@ -7,7 +7,6 @@ import {
   Layers,
   ChevronRight,
   Calendar,
-  Printer, // Added Printer icon for the new print button
 } from "lucide-react";
 
 const ItemAction = ({ po_number, setCurrentPage }) => {
@@ -116,11 +115,6 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
     }
   };
 
-  // Triggers the system print dialog
-  const handlePrint = () => {
-    window.print();
-  };
-
   const qrUrl = `${window.location.origin}/batch/${batchRef}`;
 
   return (
@@ -173,13 +167,6 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
             className='text-slate-400 font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:text-black'
           >
             <ArrowLeft size={16} /> Back
-          </button>
-
-          <button
-            onClick={handlePrint}
-            className='bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 px-3 rounded-xl transition-colors flex items-center gap-2 text-[10px] font-black uppercase tracking-wider'
-          >
-            <Printer size={16} /> Print QR
           </button>
         </div>
 
