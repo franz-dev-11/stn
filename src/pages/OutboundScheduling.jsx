@@ -76,6 +76,21 @@ const OutboundScheduling = () => {
       if (statusUpdateErr)
         throw new Error("Status Update Error: " + statusUpdateErr.message);
 
+      // Audit trail — delivery status change
+      const user = getSessionUser();
+      await insertAuditTrail([{
+        action: `DELIVERY_STATUS_UPDATE:${editData.status.toUpperCase()}`,
+        reference_number: order.so_number,
+        product_id: null,
+        item_name: `${order.customer_name || 'Customer'} — ${order.sales_items?.length || 0} item(s)`,
+        sku: null,
+        supplier: null,
+        quantity: null,
+        unit_cost: null,
+        total_amount: order.total_amount || 0,
+        performed_by: getPerformedBy(user),
+      }]);
+
       // 3. IF COMPLETED: Process Inventory and Ledger updates
       if (isBecomingCompleted) {
         console.log("Status is Completed. Processing Inventory & Ledger...");

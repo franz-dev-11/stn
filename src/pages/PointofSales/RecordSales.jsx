@@ -320,9 +320,10 @@ const RecordSales = () => {
                             <Package size={20} />
                           )}
                         </div>
-                        <span className='text-[10px] font-mono font-bold text-slate-300'>
-                          #{item.sku || "N/A"}
-                        </span>
+                        <div className='text-right'>
+                          <p className='text-[10px] font-black text-slate-500 uppercase'>Total Stock</p>
+                          <p className='font-black text-sm text-slate-900'>{item.stock_balance || 0}</p>
+                        </div>
                       </div>
                       <h3 className='font-black uppercase text-sm mb-1 leading-tight'>
                         {item.name}

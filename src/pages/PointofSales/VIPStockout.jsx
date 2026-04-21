@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
+import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
 import {
   Search,
   ShoppingCart,
@@ -193,6 +194,24 @@ const VIPStockout = () => {
         if (payErr) throw payErr;
       }
 
+      // Audit trail — one row per item sold
+      const user = getSessionUser();
+      const performedBy = getPerformedBy(user);
+      await insertAuditTrail(
+        cart.map((item) => ({
+          action: "VIP_SALE",
+          reference_number: soNum,
+          product_id: item.id,
+          item_name: item.name,
+          sku: item.sku || null,
+          supplier: item.supplier || null,
+          quantity: item.quantity,
+          unit_cost: item.displayPrice,
+          total_amount: item.quantity * item.displayPrice,
+          performed_by: performedBy,
+        }))
+      );
+
       setLastOrder({
         orderId: orderData.id,
         soNum,
@@ -348,7 +367,10 @@ const VIPStockout = () => {
                       <div className={`p-3 rounded-xl ${isOutOfStock ? "bg-slate-100 text-slate-400" : "bg-teal-50 text-teal-600"}`}>
                         {isOutOfStock ? <AlertCircle size={20} /> : <Package size={20} />}
                       </div>
-                      <span className='text-[10px] font-mono font-bold text-slate-300'>#{item.sku || "N/A"}</span>
+                      <div className='text-right'>
+                        <p className='text-[10px] font-black text-slate-500 uppercase'>Total Stock</p>
+                        <p className='font-black text-sm text-slate-900'>{item.stock_balance || 0}</p>
+                      </div>
                     </div>
                     <h3 className='font-black uppercase text-sm mb-1 leading-tight'>{item.name}</h3>
                     <p className='text-[10px] font-black text-slate-400 uppercase tracking-tighter'>Per {item.unit || "unit"}</p>

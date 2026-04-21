@@ -106,6 +106,21 @@ const InboundScheduling = () => {
         if (statusUpdateErr)
           throw new Error("Status Update Error: " + statusUpdateErr.message);
 
+        // Audit trail — inbound status change
+        const statusUser = getSessionUser();
+        await insertAuditTrail([{
+          action: `INBOUND_STATUS_UPDATE:${editData.status.toUpperCase()}`,
+          reference_number: orderNumber,
+          product_id: orderData.product_id,
+          item_name: orderData.item_name,
+          sku: null,
+          supplier: orderData.supplier || null,
+          quantity: orderData.quantity,
+          unit_cost: orderData.unit_cost || 0,
+          total_amount: (orderData.quantity || 0) * (orderData.unit_cost || 0),
+          performed_by: getPerformedBy(statusUser),
+        }]);
+
         // IF ARRIVED: Record to Inventory and Batches
         if (isBecomingArrived) {
           const batchNumber = `${orderNumber}-${orderData.product_id}`;
