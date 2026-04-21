@@ -68,7 +68,7 @@ const OutboundScheduling = () => {
           delivery_date: editData.delivery_date,
           date_processed:
             editData.status === "Completed"
-              ? new Date().toISOString()
+              ? order.created_at // Use created_at as date_processed
               : order.date_processed,
         })
         .eq("id", id);
@@ -476,20 +476,9 @@ const OutboundScheduling = () => {
                         )}
                       </td>
                       <td className='p-6'>
-                        {editingId === tx.id ? (
-                          <input
-                            type='date'
-                            className='rounded-lg p-2 text-sm font-black uppercase w-full'
-                            value={editData.date_processed}
-                            onChange={(e) =>
-                              setEditData({ ...editData, date_processed: e.target.value })
-                            }
-                          />
-                        ) : (
-                          <span className='text-xs font-black uppercase text-slate-700'>
-                            {tx.date_processed || '—'}
-                          </span>
-                        )}
+                        <span className='text-xs font-black uppercase text-slate-700'>
+                          {tx.created_at ? new Date(tx.created_at).toLocaleString() : '—'}
+                        </span>
                       </td>
                       <td className='p-6 text-right'>
                         {editingId === tx.id ? (

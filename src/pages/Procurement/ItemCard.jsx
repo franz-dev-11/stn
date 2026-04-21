@@ -41,8 +41,33 @@ const ItemCard = ({ item, onAdd, onDelete }) => {
         SKU: {item.sku}
       </p>
       <p className='text-2xl font-black mb-6 text-slate-900'>
-        ₱{item.price.toLocaleString()}
+        ₱{
+          (item.price !== undefined && item.price !== null && !isNaN(Number(item.price)))
+            ? Number(item.price).toLocaleString()
+            : '0'
+        }
       </p>
+
+      {/* Subtotal preview for qty > 1 */}
+      {qty > 1 && (
+        <p className='text-xs font-bold text-slate-600 mb-2'>
+          Subtotal: ₱{
+            (() => {
+              const price = Number(item.price);
+              const quantity = Number(qty);
+              if (
+                item.price !== undefined &&
+                item.price !== null &&
+                !isNaN(price) &&
+                !isNaN(quantity)
+              ) {
+                return (price * quantity).toLocaleString();
+              }
+              return '0';
+            })()
+          }
+        </p>
+      )}
 
       <div className='flex gap-2 mb-6'>
         <div className='flex flex-1 rounded-xl overflow-hidden h-12'>

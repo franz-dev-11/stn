@@ -149,6 +149,16 @@ const Sidebar = ({
           label: "Stockout Delivery",
           path: "/outbound",
         },
+        {
+          icon: <Tag size={20} />,
+          label: "VIP Point of Sales",
+          path: "/vip-stockout",
+        },
+        {
+          icon: <History size={20} />,
+          label: "VIP Transactions",
+          path: "/vip-transactions",
+        },
       ],
     },
   ];

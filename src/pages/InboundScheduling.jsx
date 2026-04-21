@@ -55,6 +55,22 @@ const InboundScheduling = () => {
       // Get the order_number from first item
       const orderNumber = orders.find((o) => o.id === firstItemId)?.order_number;
       
+
+      // Fetch created_at from purchase_orders for this order group (by orderNumber)
+      let poCreatedAt = null;
+      if (editData.status === "Arrived" && orderNumber) {
+        const { data: poData, error: poErr } = await supabase
+          .from("purchase_orders")
+          .select("created_at")
+          .eq("po_number", orderNumber)
+          .maybeSingle();
+        if (poErr) throw new Error("Fetch PO Error: " + poErr.message);
+        poCreatedAt = poData?.created_at || null;
+        // Debug log
+        console.log("[DEBUG] Fetched PO created_at for orderNumber:", orderNumber, "=>", poCreatedAt);
+        alert(`[DEBUG] Fetched PO created_at for orderNumber: ${orderNumber} => ${poCreatedAt}`);
+      }
+
       // Update all items in this order group
       for (const order of groupItems) {
         // Get latest data
@@ -82,7 +98,7 @@ const InboundScheduling = () => {
                 : orderData.date_arrived,
             date_processed:
               editData.status === "Arrived"
-                ? new Date().toISOString()
+                ? (poCreatedAt || orderData.created_at)
                 : orderData.date_processed,
           })
           .eq("id", order.id);
@@ -103,31 +119,7 @@ const InboundScheduling = () => {
             .maybeSingle();
 
           if (!existingBatch) {
-            // Get current inventory
-            const { data: inv, error: invFetchErr } = await supabase
-              .from("hardware_inventory")
-              .select("stock_balance, inbound_qty, outbound_qty")
-              .eq("id", orderData.product_id)
-              .single();
-
-            if (invFetchErr)
-              throw new Error("Inventory Fetch Error: " + invFetchErr.message);
-
-            // Update Hardware Inventory Table
-            const { error: invUpdateErr } = await supabase
-              .from("hardware_inventory")
-              .update({
-                inbound_qty: Number(inv?.inbound_qty || 0) + Number(orderData.quantity),
-                stock_balance:
-                  Number(inv?.stock_balance || 0) + Number(orderData.quantity),
-                outbound_qty: Number(inv?.outbound_qty || 0),
-              })
-              .eq("id", orderData.product_id);
-
-            if (invUpdateErr)
-              throw new Error("Inventory Update Error: " + invUpdateErr.message);
-
-            // Insert into inventory_batches
+            // Only insert into inventory_batches
             const { error: batchErr } = await supabase
               .from("inventory_batches")
               .insert([
@@ -180,6 +172,33 @@ const InboundScheduling = () => {
       filterStatus === "All Statuses" || o.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
+
+  const [poCreatedAtMap, setPoCreatedAtMap] = useState({});
+
+  useEffect(() => {
+    // Fetch created_at for all unique order_numbers in filteredOrders
+    const fetchPOCreatedAts = async () => {
+      const uniqueOrderNumbers = Array.from(new Set(filteredOrders.map(o => o.order_number)));
+      if (uniqueOrderNumbers.length === 0) {
+        setPoCreatedAtMap({});
+        return;
+      }
+      const { data, error } = await supabase
+        .from("purchase_orders")
+        .select("po_number, created_at")
+        .in("po_number", uniqueOrderNumbers);
+      if (error) {
+        setPoCreatedAtMap({});
+        return;
+      }
+      const map = {};
+      for (const row of data) {
+        map[row.po_number] = row.created_at;
+      }
+      setPoCreatedAtMap(map);
+    };
+    fetchPOCreatedAts();
+  }, [filteredOrders]);
 
   const groupedOrders = useMemo(() => {
     const grouped = {};
@@ -493,20 +512,11 @@ const InboundScheduling = () => {
                       )}
                     </td>
                     <td className='p-6'>
-                      {editingId === group.firstItemId ? (
-                        <input
-                          type='datetime-local'
-                          className='rounded-lg p-2 text-sm font-black uppercase w-full'
-                          value={editData.date_processed || ''}
-                          onChange={(e) =>
-                            setEditData({ ...editData, date_processed: e.target.value })
-                          }
-                        />
-                      ) : (
-                        <div className='text-sm font-black text-slate-700 uppercase'>
-                          {group.items[0]?.date_processed ? new Date(group.items[0].date_processed).toLocaleString() : '—'}
-                        </div>
-                      )}
+                      <div className='text-sm font-black text-slate-700 uppercase'>
+                        {poCreatedAtMap[group.order_number]
+                          ? new Date(poCreatedAtMap[group.order_number]).toLocaleString()
+                          : (group.items[0]?.date_processed ? new Date(group.items[0].date_processed).toLocaleString() : '—')}
+                      </div>
                     </td>
                     <td className='p-6 text-right'>
                       {editingId === group.firstItemId ? (

@@ -16,6 +16,7 @@ import {
 const InvoiceHistory = () => {
   const [invoices, setInvoices] = useState([]);
   const [expandedInvoice, setExpandedInvoice] = useState(null);
+  const [vipData, setVipData] = useState({}); // { [inv.id]: { order, payments } }
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -69,6 +70,26 @@ const InvoiceHistory = () => {
     currentPage * itemsPerPage,
   );
   const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+
+  const toggleExpand = async (inv) => {
+    const isOpen = expandedInvoice === inv.id;
+    setExpandedInvoice(isOpen ? null : inv.id);
+    if (!isOpen && inv.transaction_type === 'vip' && !vipData[inv.id]) {
+      const { data: orderRow } = await supabase
+        .from('vip_orders')
+        .select('id, grand_total, downpayment, balance, installments, installment_amount, status')
+        .eq('so_number', inv.so_number)
+        .maybeSingle();
+      if (orderRow) {
+        const { data: payments } = await supabase
+          .from('vip_payments')
+          .select('id, amount, note, paid_at')
+          .eq('order_id', orderRow.id)
+          .order('paid_at');
+        setVipData(prev => ({ ...prev, [inv.id]: { order: orderRow, payments: payments || [] } }));
+      }
+    }
+  };
 
   return (
     <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-[#f3f4f6] min-h-screen text-black print:bg-white print:p-0 overflow-x-hidden'>
@@ -177,9 +198,7 @@ const InvoiceHistory = () => {
                     return (
                       <React.Fragment key={inv.id}>
                         <tr
-                          onClick={() =>
-                            setExpandedInvoice(isExpanded ? null : inv.id)
-                          }
+                          onClick={() => toggleExpand(inv)}
                           className='hover:bg-slate-50 cursor-pointer transition-colors'
                         >
                           <td className='px-6 py-4 text-[10px] font-bold text-slate-500 whitespace-nowrap'>
@@ -333,6 +352,81 @@ const InvoiceHistory = () => {
                                       </tr>
                                     </tfoot>
                                   </table>
+
+                                  {/* VIP Installment Payment Panel */}
+                                  {inv.transaction_type === 'vip' && (() => {
+                                    const vip = vipData[inv.id];
+                                    if (!vip) return (
+                                      <div className='mt-4 p-4 bg-teal-50 rounded-xl text-xs font-bold text-teal-700 uppercase'>Loading payment info...</div>
+                                    );
+                                    const { order, payments } = vip;
+                                    const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
+                                    const outstanding = Math.max(0, Number(order.grand_total) - totalPaid);
+                                    const progressPct = order.grand_total > 0 ? Math.min(100, (totalPaid / order.grand_total) * 100) : 0;
+                                    return (
+                                      <div className='mt-6 border-t-2 border-teal-400 pt-6'>
+                                        <h3 className='text-[10px] font-black uppercase text-teal-700 tracking-widest mb-4'>VIP Payment Terms</h3>
+                                        <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4'>
+                                          <div className='bg-slate-50 rounded-xl p-3'>
+                                            <p className='text-[9px] font-black uppercase text-slate-500 mb-1'>Grand Total</p>
+                                            <p className='text-sm font-black'>₱{Number(order.grand_total).toLocaleString()}</p>
+                                          </div>
+                                          <div className='bg-slate-50 rounded-xl p-3'>
+                                            <p className='text-[9px] font-black uppercase text-slate-500 mb-1'>Downpayment</p>
+                                            <p className='text-sm font-black'>₱{Number(order.downpayment).toLocaleString()}</p>
+                                          </div>
+                                          <div className='bg-slate-50 rounded-xl p-3'>
+                                            <p className='text-[9px] font-black uppercase text-slate-500 mb-1'>Installments</p>
+                                            <p className='text-sm font-black'>{order.installments}× ₱{Number(order.installment_amount).toLocaleString()}</p>
+                                          </div>
+                                          <div className={`rounded-xl p-3 ${outstanding > 0 ? 'bg-red-50' : 'bg-emerald-50'}`}>
+                                            <p className='text-[9px] font-black uppercase text-slate-500 mb-1'>Outstanding</p>
+                                            <p className={`text-sm font-black ${outstanding > 0 ? 'text-red-600' : 'text-emerald-600'}`}>₱{outstanding.toLocaleString()}</p>
+                                          </div>
+                                        </div>
+                                        {/* Progress Bar */}
+                                        <div className='mb-4'>
+                                          <div className='flex justify-between text-[9px] font-black uppercase text-slate-500 mb-1'>
+                                            <span>Payment Progress</span>
+                                            <span>{progressPct.toFixed(0)}%</span>
+                                          </div>
+                                          <div className='w-full bg-slate-200 rounded-full h-2'>
+                                            <div className='bg-teal-500 h-2 rounded-full transition-all' style={{ width: `${progressPct}%` }} />
+                                          </div>
+                                          <div className='flex justify-between text-[9px] font-bold text-slate-400 mt-1'>
+                                            <span>Paid: ₱{totalPaid.toLocaleString()}</span>
+                                            <span>Total: ₱{Number(order.grand_total).toLocaleString()}</span>
+                                          </div>
+                                        </div>
+                                        {/* Payment History */}
+                                        {payments.length > 0 && (
+                                          <div>
+                                            <p className='text-[9px] font-black uppercase text-slate-500 mb-2'>Payment History</p>
+                                            <table className='w-full text-left text-[10px]'>
+                                              <thead>
+                                                <tr className='bg-slate-100 font-black uppercase text-slate-500'>
+                                                  <th className='px-3 py-2'>#</th>
+                                                  <th className='px-3 py-2'>Date</th>
+                                                  <th className='px-3 py-2'>Note</th>
+                                                  <th className='px-3 py-2 text-right'>Amount</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className='divide-y divide-slate-100'>
+                                                {payments.map((p, idx) => (
+                                                  <tr key={p.id}>
+                                                    <td className='px-3 py-2 font-black text-slate-400'>{idx + 1}</td>
+                                                    <td className='px-3 py-2 font-bold text-slate-600'>{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : '—'}</td>
+                                                    <td className='px-3 py-2 font-bold text-slate-600'>{p.note || '—'}</td>
+                                                    <td className='px-3 py-2 text-right font-black text-teal-700'>₱{Number(p.amount).toLocaleString()}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             </td>

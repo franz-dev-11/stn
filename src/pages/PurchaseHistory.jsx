@@ -24,6 +24,7 @@ const PurchaseHistory = () => {
   const [returnMode, setReturnMode] = useState({});
   const [returnSelections, setReturnSelections] = useState({});
   const [returnSaving, setReturnSaving] = useState({});
+  const [returnRecords, setReturnRecords] = useState([]); // <-- NEW
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -59,6 +60,17 @@ const PurchaseHistory = () => {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  // Fetch return records for all POs/items
+  useEffect(() => {
+    const fetchReturns = async () => {
+      const { data, error } = await supabase
+        .from("return_records")
+        .select("*");
+      if (!error) setReturnRecords(data || []);
+    };
+    fetchReturns();
   }, []);
 
   // Filtering & Pagination Logic
@@ -98,8 +110,21 @@ const PurchaseHistory = () => {
       grouped[key].items.push(batch);
       grouped[key].totalAmount += (batch.unit_cost || 0) * (batch.quantity || 0);
     });
+    // Subtract refunded value for each group
+    Object.values(grouped).forEach((receipt) => {
+      if (!Array.isArray(receipt.items) || !receipt.order_number) return;
+      // For each item in this receipt, sum refunded value
+      let refundTotal = 0;
+      receipt.items.forEach((item) => {
+        if (!item.product_id) return;
+        const refunds = returnRecords.filter(r => r.order_number === receipt.order_number && r.product_id === item.product_id && r.resolution_status === "refunded");
+        refundTotal += refunds.reduce((sum, r) => sum + ((r.return_qty || 0) * (r.unit_cost || 0)), 0);
+      });
+      receipt.totalAmount -= refundTotal;
+      if (receipt.totalAmount < 0) receipt.totalAmount = 0;
+    });
     return Object.values(grouped);
-  }, [filteredBatches]);
+  }, [filteredBatches, returnRecords]);
 
   const currentItems = groupedReceipts.slice(
     (currentPage - 1) * itemsPerPage,
@@ -111,16 +136,52 @@ const PurchaseHistory = () => {
     e.stopPropagation();
     if (!window.confirm(`Mark "${receipt.order_number}" as Received?`)) return;
     try {
+      // Update PO and order_scheduling status
       const { error } = await supabase
         .from("purchase_orders")
         .update({ status: "Received" })
         .eq("po_number", receipt.order_number);
       if (error) throw error;
-      // Also update order_scheduling rows
       await supabase
         .from("order_scheduling")
         .update({ status: "Received" })
         .eq("order_number", receipt.order_number);
+
+      // Update inventory for each item in the PO
+      for (const item of receipt.items) {
+        const productId = item.product_id;
+        const qty = Number(item.quantity) || 0;
+        // Fetch inventory
+        const { data: inv, error: invFetchErr } = await supabase
+          .from("hardware_inventory")
+          .select("inbound_qty, stock_balance")
+          .eq("id", productId)
+          .maybeSingle();
+        if (invFetchErr) throw new Error(invFetchErr.message);
+        if (inv) {
+          await supabase
+            .from("hardware_inventory")
+            .update({
+              inbound_qty: Number(inv.inbound_qty || 0) + qty,
+              stock_balance: Number(inv.stock_balance || 0) + qty,
+            })
+            .eq("id", productId);
+        }
+        // Optionally, update inventory_batches if needed
+        const batchNumber = `${receipt.order_number}-${productId}`;
+        const { data: batch } = await supabase
+          .from("inventory_batches")
+          .select("id, current_stock")
+          .eq("batch_number", batchNumber)
+          .maybeSingle();
+        if (batch) {
+          await supabase
+            .from("inventory_batches")
+            .update({ current_stock: Number(batch.current_stock || 0) + qty })
+            .eq("id", batch.id);
+        }
+      }
+
       setBatches((prev) =>
         prev.map((b) =>
           b.order_number === receipt.order_number
@@ -128,6 +189,7 @@ const PurchaseHistory = () => {
             : b,
         ),
       );
+      alert("Inventory updated for all items in this PO.");
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -459,7 +521,7 @@ const PurchaseHistory = () => {
                                         <CheckCircle2 size={14} /> Mark Received
                                       </button>
                                     )}
-                                    {(receipt.status === 'Arrived' || receipt.status === 'Received') && (
+                                    {receipt.status === 'Arrived' && (
                                       <>
                                       <button
                                         onClick={(e) => { e.stopPropagation(); handleToggleReturnMode(receipt.id); }}
@@ -563,55 +625,80 @@ const PurchaseHistory = () => {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {receipt.items.map((item, idx) => (
-                                        <tr
-                                          key={idx}
-                                          className={`border-b border-slate-100 transition-colors ${
-                                            returnMode[receipt.id] && (returnSelections[receipt.id]?.[item.id] || 0) > 0
-                                              ? 'bg-rose-50'
-                                              : ''
-                                          }`}
-                                        >
-                                          {returnMode[receipt.id] && (
-                                            <td className='py-4 px-4' onClick={(e) => e.stopPropagation()}>
-                                              <input
-                                                type='number'
-                                                min={0}
-                                                max={item.quantity}
-                                                value={returnSelections[receipt.id]?.[item.id] ?? ''}
-                                                placeholder='0'
-                                                onChange={(e) => handleSetReturnQty(receipt.id, item.id, e.target.value, item.quantity)}
-                                                className='w-14 px-2 py-1 text-xs font-black text-center border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent'
-                                              />
-                                              {item.quantity > 0 && (
-                                                <p className='text-[9px] text-slate-400 font-bold text-center mt-0.5'>of {item.quantity}</p>
-                                              )}
+                                      {receipt.items.map((item, idx) => {
+                                        // Aggregate return info for this item
+                                        const returns = returnRecords.filter(r => r.order_number === receipt.order_number && r.product_id === item.product_id);
+                                        const returnedQty = returns.filter(r => !r.resolution_status || r.resolution_status === "pending").reduce((s, r) => s + (r.return_qty || 0), 0);
+                                        const replacedQty = returns.filter(r => r.resolution_status === "replaced").reduce((s, r) => s + (r.return_qty || 0), 0);
+                                        const refundedQty = returns.filter(r => r.resolution_status === "refunded").reduce((s, r) => s + (r.return_qty || 0), 0);
+                                        return (
+                                          <tr
+                                            key={idx}
+                                            className={`border-b border-slate-100 transition-colors ${
+                                              returnMode[receipt.id] && (returnSelections[receipt.id]?.[item.id] || 0) > 0
+                                                ? 'bg-rose-50'
+                                                : ''
+                                            }`}
+                                          >
+                                            {returnMode[receipt.id] && (
+                                              <td className='py-4 px-4' onClick={(e) => e.stopPropagation()}>
+                                                <input
+                                                  type='number'
+                                                  min={0}
+                                                  max={item.quantity}
+                                                  value={returnSelections[receipt.id]?.[item.id] ?? ''}
+                                                  placeholder='0'
+                                                  onChange={(e) => handleSetReturnQty(receipt.id, item.id, e.target.value, item.quantity)}
+                                                  className='w-14 px-2 py-1 text-xs font-black text-center border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent'
+                                                />
+                                                {item.quantity > 0 && (
+                                                  <p className='text-[9px] text-slate-400 font-bold text-center mt-0.5'>of {item.quantity}</p>
+                                                )}
+                                              </td>
+                                            )}
+                                            <td className='py-4 px-4 text-[10px] font-mono font-bold text-slate-600'>
+                                              #{item.hardware_inventory?.sku}
                                             </td>
-                                          )}
-                                          <td className='py-4 px-4 text-[10px] font-mono font-bold text-slate-600'>
-                                            #{item.hardware_inventory?.sku}
-                                          </td>
-                                          <td className='py-4 text-sm font-black uppercase'>
-                                            {item.hardware_inventory?.name}
-                                          </td>
-                                          <td className='py-4 text-center font-black'>
-                                            {item.quantity}
-                                          </td>
-                                          <td className='py-4 text-center text-xs font-bold text-slate-600 uppercase'>
-                                            {item.hardware_inventory?.unit}
-                                          </td>
-                                          <td className='py-4 text-right text-sm font-bold'>
-                                            ₱{item.unit_cost?.toLocaleString()}
-                                          </td>
-                                          <td className='py-4 text-right text-sm font-black'>
-                                            ₱
-                                            {(
-                                              item.unit_cost *
-                                              item.quantity
-                                            ).toLocaleString()}
-                                          </td>
-                                        </tr>
-                                      ))}
+                                            <td className='py-4 text-sm font-black uppercase'>
+                                              {item.hardware_inventory?.name}
+                                              {/* Return info badges */}
+                                              <div className='flex flex-wrap gap-1 mt-1'>
+                                                {returnedQty > 0 && (
+                                                  <span className='inline-block bg-rose-100 text-rose-700 text-[9px] font-bold px-2 py-0.5 rounded'>
+                                                    Returned: {returnedQty}
+                                                  </span>
+                                                )}
+                                                {replacedQty > 0 && (
+                                                  <span className='inline-block bg-emerald-100 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded'>
+                                                    Replaced: {replacedQty}
+                                                  </span>
+                                                )}
+                                                {refundedQty > 0 && (
+                                                  <span className='inline-block bg-blue-100 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded'>
+                                                    Refunded: {refundedQty}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className='py-4 text-center font-black'>
+                                              {item.quantity}
+                                            </td>
+                                            <td className='py-4 text-center text-xs font-bold text-slate-600 uppercase'>
+                                              {item.hardware_inventory?.unit}
+                                            </td>
+                                            <td className='py-4 text-right text-sm font-bold'>
+                                              ₱{item.unit_cost?.toLocaleString()}
+                                            </td>
+                                            <td className='py-4 text-right text-sm font-black'>
+                                              ₱
+                                              {(
+                                                item.unit_cost *
+                                                item.quantity
+                                              ).toLocaleString()}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
                                     </tbody>
                                     <tfoot>
                                       <tr className='border-t-2 border-slate-200'>

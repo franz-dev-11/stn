@@ -22,6 +22,8 @@ const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const BatchRecord = lazy(() => import("./pages/BatchRecord"));
 const ReturnRecords = lazy(() => import("./pages/ReturnRecords"));
 const AuditTrail = lazy(() => import("./pages/AuditTrail"));
+const VIPStockout = lazy(() => import("./pages/PointofSales/VIPStockout"));
+const VIPTransactions = lazy(() => import("./pages/PointofSales/VIPTransactions"));
 
 const AppLayout = ({ currentUser, mustChangePassword, setCurrentUser }) => {
   const [currentPage, setCurrentPage] = useState("Dashboard");
@@ -136,6 +138,9 @@ function App() {
           <Route path='/manage-users' element={(userRole === "Cashier" || userRole === "Stockman") ? <Navigate to='/purchasing' replace /> : <UserManagement />} />
           <Route path='/return-records' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <ReturnRecords />} />
           <Route path='/audit-trail' element={(userRole === "Cashier" || userRole === "Stockman") ? <Navigate to='/purchasing' replace /> : <AuditTrail />} />
+
+          <Route path='/vip-stockout' element={<VIPStockout />} />
+          <Route path='/vip-transactions' element={<VIPTransactions />} />
         </Route>
 
         <Route path='*' element={<Navigate to='/login' replace />} />

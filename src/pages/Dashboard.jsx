@@ -81,6 +81,8 @@ const Dashboard = () => {
   const [productPricing, setProductPricing] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [vipOrders, setVipOrders] = useState([]);
+  const [vipPayments, setVipPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -99,7 +101,7 @@ const Dashboard = () => {
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
 
-  const openDrill = (title, headers, rows) => setDrillDown({ title, headers, rows });
+  const openDrill = (title, headers, rows, onRowClick) => setDrillDown({ title, headers, rows, onRowClick });
   const closeDrill = () => setDrillDown(null);
 
   const fetchDashboardData = useCallback(async () => {
@@ -118,6 +120,8 @@ const Dashboard = () => {
         pricingRes,
         profilesRes,
         suppliersRes,
+        vipOrdersRes,
+        vipPaymentsRes,
       ] = await Promise.all([
         supabase
           .from("hardware_inventory")
@@ -155,6 +159,8 @@ const Dashboard = () => {
           ),
         supabase.from("profiles").select("id, role, approval_status, is_approved"),
         supabase.from("suppliers").select("id"),
+        supabase.from("vip_orders").select("id, customer_name, grand_total"),
+        supabase.from("vip_payments").select("order_id, amount"),
       ]);
 
       if (invRes.error) throw invRes.error;
@@ -178,6 +184,8 @@ const Dashboard = () => {
       setProductPricing(pricingRes.data || []);
       setProfiles(profilesRes.data || []);
       setSuppliers(suppliersRes.data || []);
+      setVipOrders(vipOrdersRes.data || []);
+      setVipPayments(vipPaymentsRes.data || []);
     } catch (fetchError) {
       console.error("Dashboard Load Error:", fetchError.message);
       setError(fetchError.message || "Failed to load dashboard analytics.");
@@ -617,6 +625,21 @@ const Dashboard = () => {
       return !profile.is_approved || approvalStatus === "pending";
     }).length;
 
+    // VIP customers with outstanding balance
+    const vipPaymentsByOrder = vipPayments.reduce((acc, p) => {
+      acc[p.order_id] = (acc[p.order_id] || 0) + Number(p.amount);
+      return acc;
+    }, {});
+    const vipWithOutstanding = vipOrders.filter((o) => {
+      const paid = vipPaymentsByOrder[o.id] || 0;
+      return Number(o.grand_total) - paid > 0;
+    });
+    const vipOutstandingCount = vipWithOutstanding.length;
+    const vipOutstandingTotal = vipWithOutstanding.reduce((sum, o) => {
+      const paid = vipPaymentsByOrder[o.id] || 0;
+      return sum + Math.max(0, Number(o.grand_total) - paid);
+    }, 0);
+
     const supplierCoverage = suppliers.length;
 
     const statusRows = [
@@ -686,6 +709,8 @@ const Dashboard = () => {
       lowCoverageSkus,
       pendingApprovals,
       supplierCoverage,
+      vipOutstandingCount,
+      vipOutstandingTotal,
       statusRows,
       supplierSpendRows,
     };
@@ -697,6 +722,8 @@ const Dashboard = () => {
     pendingInboundByProduct,
     profiles,
     suppliers.length,
+    vipOrders,
+    vipPayments,
   ]);
 
   const salesStatusMix = useMemo(() => {
@@ -1518,14 +1545,24 @@ const Dashboard = () => {
           )}
         />
         <StatCard
-          label='Accounts for Approval'
-          value={erpOps.pendingApprovals.toLocaleString()}
+          label='VIP Outstanding Balance'
+          value={erpOps.vipOutstandingCount.toLocaleString()}
           icon={<Filter className='text-fuchsia-600' />}
-          sub={`Suppliers on file: ${erpOps.supplierCoverage}`}
+          sub={`Total due: ${formatCurrency(erpOps.vipOutstandingTotal)}`}
           onClick={() => openDrill(
-            'Accounts for Approval',
-            ['Profile ID', 'Role', 'Approval Status', 'Approved'],
-            profiles.filter(p => !p.is_approved || (p.approval_status || '').toLowerCase() === 'pending').map(p => [p.id, p.role || '—', p.approval_status || '—', p.is_approved ? 'Yes' : 'No'])
+            'VIP Customers with Outstanding Balance',
+            ['Customer', 'Grand Total', 'Paid', 'Outstanding'],
+            vipOrders
+              .filter(o => {
+                const paid = vipPayments.filter(p => p.order_id === o.id).reduce((s, p) => s + Number(p.amount), 0);
+                return Number(o.grand_total) - paid > 0;
+              })
+              .map(o => {
+                const paid = vipPayments.filter(p => p.order_id === o.id).reduce((s, p) => s + Number(p.amount), 0);
+                const outstanding = Number(o.grand_total) - paid;
+                return [o.customer_name, formatCurrency(o.grand_total), formatCurrency(paid), formatCurrency(outstanding)];
+              }),
+            (row) => navigate('/vip-transactions', { state: { customerName: row[0] } })
           )}
         />
       </div>
@@ -2507,7 +2544,11 @@ const Dashboard = () => {
                     </tr>
                   ) : (
                     drillDown.rows.map((row, i) => (
-                      <tr key={i} className='hover:bg-slate-50'>
+                      <tr
+                        key={i}
+                        className={`hover:bg-slate-50 ${drillDown.onRowClick ? 'cursor-pointer' : ''}`}
+                        onClick={() => drillDown.onRowClick && (closeDrill(), drillDown.onRowClick(row))}
+                      >
                         {row.map((cell, j) => (
                           <td key={j} className='px-5 py-3 font-bold text-slate-700 whitespace-nowrap'>{cell ?? '—'}</td>
                         ))}
