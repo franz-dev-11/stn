@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { Plus, Trash2, UserPlus, Users, CheckCircle, AlertCircle, Upload, Download, RefreshCw } from "lucide-react";
+import * as XLSX from "xlsx";
 
 async function hashPassword(password) {
   const encoder = new TextEncoder();
@@ -300,12 +301,20 @@ const CSV_REQUIRED = ["first_name", "last_name", "birthday"];
 const TEMPLATE_HEADERS = ["first_name", "middle_name", "last_name", "birthday"];
 
 function downloadTemplate() {
-  const rows = [TEMPLATE_HEADERS.join(",")];
-  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  // Create worksheet data
+  const wsData = [
+    ["first_name", "middle_name", "last_name", "birthday"],
+    ["Juan", "Lopez", "Dela Cruz", "1990-05-21"]
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Accounts");
+  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([wbout], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "accounts_template.csv";
+  a.download = "accounts_template.xlsx";
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -355,7 +364,7 @@ function BatchForm() {
   // Returns the highest numeric emp ID currently in the rows array
   const maxReservedId = () => rows.map((r) => r.employee_id).filter(Boolean);
 
-  const handleCSVUpload = (e) => {
+  const handleExcelUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     e.target.value = "";
@@ -364,23 +373,119 @@ function BatchForm() {
 
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const { rows: parsed, error } = parseCSV(ev.target.result);
+      const data = new Uint8Array(ev.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const ws = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      if (json.length < 2) {
+        setCsvError("Excel file has no data rows.");
+        return;
+      }
+      const headers = json[0].map((h) => String(h).trim().toLowerCase());
+      const missing = CSV_REQUIRED.filter((h) => !headers.includes(h));
+      if (missing.length > 0) {
+        setCsvError(`Missing required columns: ${missing.join(", ")}`);
+        return;
+      }
+      const rowsArr = json.slice(1).map((vals, i) => {
+        const obj = { _id: Date.now() + i };
+        headers.forEach((h, idx) => {
+          if (h === "birthday") {
+            let b = vals[idx];
+            let dateStr = "";
+            if (b instanceof Date) {
+              const d = b;
+              const day = String(d.getDate()).padStart(2, '0');
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const year = d.getFullYear();
+              dateStr = `${day}/${month}/${year}`;
+            } else if (typeof b === "number") {
+              // Excel date serial number
+              const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+              const d = new Date(excelEpoch.getTime() + b * 86400000);
+              const day = String(d.getDate()).padStart(2, '0');
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const year = d.getFullYear();
+              dateStr = `${day}/${month}/${year}`;
+            } else if (typeof b === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(b.trim())) {
+              dateStr = b.trim();
+            } else if (typeof b === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.trim())) {
+              // Convert from YYYY-MM-DD to DD/MM/YYYY
+              const [y, m, d] = b.trim().split('-');
+              dateStr = `${d}/${m}/${y}`;
+            } else {
+              dateStr = "";
+            }
+            obj[h] = dateStr;
+          } else {
+            obj[h] = vals[idx] ? String(vals[idx]).trim() : "";
+          }
+        });
+        if (!obj.role) obj.role = "Cashier";
+        return obj;
+      });
+      // Auto-fill employee_id, username, password as in CSV
+      const dbData = await supabase.from("users").select("employee_id").order("employee_id", { ascending: false });
+      const dbNums = (dbData.data || []).map((r) => parseEmpNum(r.employee_id));
+      const baseMax = dbNums.length > 0 ? Math.max(...dbNums) : 0;
+      const filled = rowsArr.map((row, i) => {
+        const empId = row.employee_id || formatEmpId(baseMax + i + 1);
+        const username = buildUsername(row.first_name, row.middle_name, row.last_name, empId);
+        // Convert DD/MM/YYYY to YYYY-MM-DD for password generation
+        let bday = row.birthday || "";
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(bday)) {
+          const [dd, mm, yyyy] = bday.split("/");
+          bday = `${yyyy}-${mm}-${dd}`;
+        }
+        const password = generatePassword(row.last_name, bday);
+        return {
+          ...row,
+          employee_id: empId,
+          username,
+          password,
+        };
+      });
+      setRows(filled);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleCSVUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = "";
+    setCsvError(null);
+    setResult(null);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target.result;
+      const { rows: parsedRows, error } = parseCSV(text);
       if (error) {
         setCsvError(error);
         return;
       }
-      // Auto-fill employee_id sequentially, username and password if missing
+      // Query DB for last employee_id, increment for new rows
       const dbData = await supabase.from("users").select("employee_id").order("employee_id", { ascending: false });
       const dbNums = (dbData.data || []).map((r) => parseEmpNum(r.employee_id));
       const baseMax = dbNums.length > 0 ? Math.max(...dbNums) : 0;
-
-      const filled = parsed.map((row, i) => {
+      const filled = parsedRows.map((row, i) => {
         const empId = row.employee_id || formatEmpId(baseMax + i + 1);
+        const birthday = typeof row.birthday === "string" ? row.birthday.trim() : String(row.birthday ?? "").trim();
+        const username = buildUsername(row.first_name, row.middle_name, row.last_name, empId);
+        // Convert DD/MM/YYYY to YYYY-MM-DD for password generation
+        let bday = birthday;
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(bday)) {
+          const [dd, mm, yyyy] = bday.split("/");
+          bday = `${yyyy}-${mm}-${dd}`;
+        }
+        const password = generatePassword(row.last_name, bday);
         return {
           ...row,
           employee_id: empId,
-          username: row.username || buildUsername(row.first_name, row.middle_name, row.last_name, empId),
-          password: row.password || generatePassword(),
+          birthday,
+          username,
+          password,
         };
       });
       setRows(filled);
@@ -393,7 +498,7 @@ function BatchForm() {
       .then((nextId) => {
         setRows((prev) => [
           ...prev,
-          { ...EMPTY_ACCOUNT, _id: Date.now(), employee_id: nextId, password: generatePassword() },
+          { ...EMPTY_ACCOUNT, _id: Date.now(), employee_id: nextId, username: "", password: "" },
         ]);
       })
       .catch(console.error);
@@ -410,13 +515,46 @@ function BatchForm() {
     setRows((prev) =>
       prev.map((row) => {
         if (row._id !== id) return row;
-        const next = { ...row, [name]: value };
+        const next = { ...row };
+        if (name === "birthday") {
+          // Always store as DD/MM/YYYY string or empty
+          if (typeof value === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(value.trim())) {
+            next.birthday = value.trim();
+          } else if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+            // Convert from YYYY-MM-DD to DD/MM/YYYY
+            const [y, m, d] = value.trim().split('-');
+            next.birthday = `${d}/${m}/${y}`;
+          } else if (value instanceof Date) {
+            const d = value;
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            next.birthday = `${day}/${month}/${year}`;
+          } else {
+            next.birthday = "";
+          }
+        } else {
+          next[name] = value;
+        }
         const fn = name === "first_name" ? value : row.first_name;
         const mn = name === "middle_name" ? value : row.middle_name;
         const ln = name === "last_name" ? value : row.last_name;
         const eid = name === "employee_id" ? value : row.employee_id;
         if (["first_name", "middle_name", "last_name", "employee_id"].includes(name)) {
           next.username = buildUsername(fn, mn, ln, eid);
+        }
+        // Regenerate password if last_name or birthday changes
+        if (["last_name", "birthday"].includes(name)) {
+          const newLastName = name === "last_name" ? value : row.last_name;
+          const newBirthday = name === "birthday" ? next.birthday : row.birthday;
+          next.password = generatePassword(newLastName, (() => {
+            // Convert DD/MM/YYYY to YYYY-MM-DD for password generation
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(newBirthday)) {
+              const [dd, mm, yyyy] = newBirthday.split("/");
+              return `${yyyy}-${mm}-${dd}`;
+            }
+            return newBirthday;
+          })());
         }
         return next;
       })
@@ -449,15 +587,28 @@ function BatchForm() {
     setLoading(true);
     try {
       const payload = await Promise.all(
-        rows.map(async ({ _id, password, ...rest }) => ({
-          ...rest,
-          employee_id: rest.employee_id.trim(),
-          first_name: rest.first_name.trim(),
-          middle_name: rest.middle_name.trim(),
-          last_name: rest.last_name.trim(),
-          username: rest.username.trim(),
-          password: await hashPassword(password),
-        }))
+        rows.map(async ({ password, ...rest }) => {
+          // Convert DD/MM/YYYY to YYYY-MM-DD for upload
+          let bday = rest.birthday;
+          if (typeof bday === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(bday.trim())) {
+            const [d, m, y] = bday.trim().split('/');
+            bday = `${y}-${m}-${d}`;
+          } else if (typeof bday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(bday.trim())) {
+            // already correct
+          } else {
+            bday = "";
+          }
+          return {
+            ...rest,
+            employee_id: rest.employee_id.trim(),
+            first_name: rest.first_name.trim(),
+            middle_name: rest.middle_name.trim(),
+            last_name: rest.last_name.trim(),
+            birthday: bday,
+            username: rest.username.trim(),
+            password: await hashPassword(password),
+          };
+        })
       );
 
       const { error } = await supabase.from("users").insert(payload);
@@ -494,8 +645,12 @@ function BatchForm() {
         <input
           ref={fileInputRef}
           type='file'
-          accept='.csv'
-          onChange={handleCSVUpload}
+          accept='.csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .xlsx'
+          onChange={(e) => {
+            const file = e.target.files[0];
+            if (file && file.name.endsWith('.xlsx')) handleExcelUpload(e);
+            else handleCSVUpload(e);
+          }}
           className='hidden'
         />
         <button
@@ -504,7 +659,7 @@ function BatchForm() {
           className='flex items-center gap-1.5 text-xs font-semibold text-slate-600 border border-slate-200 hover:border-slate-300 px-3 py-2 rounded-lg bg-white hover:bg-slate-50 transition'
         >
           <Upload size={13} />
-          Upload CSV
+          Upload CSV/Excel
         </button>
         <button
           type='button'
@@ -602,14 +757,34 @@ function BatchForm() {
                         {row[col.key] || "—"}
                       </div>
                     ) : (
-                      <input
-                        type={col.type}
-                        value={row[col.key]}
-                        onChange={(e) => handleChange(row._id, col.key, e.target.value)}
-                        placeholder={col.placeholder}
-                        autoComplete='off'
-                        className='w-full px-2 py-1.5 text-xs border border-slate-200 rounded-md outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent bg-white min-w-22.5'
-                      />
+                      <>
+                        <input
+                          type={col.type}
+                          value={col.key === "birthday" && col.type === "date"
+                            ? (() => {
+                                // Convert DD/MM/YYYY to YYYY-MM-DD for date input
+                                const val = row[col.key];
+                                if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
+                                  const [dd, mm, yyyy] = val.split("/");
+                                  return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+                                }
+                                return "";
+                              })()
+                            : row[col.key]}
+                          onChange={(e) => {
+                            if (col.key === "birthday" && col.type === "date") {
+                              // Convert YYYY-MM-DD from date picker to DD/MM/YYYY for storage
+                              const [yyyy, mm, dd] = e.target.value.split("-");
+                              handleChange(row._id, col.key, `${dd}/${mm}/${yyyy}`);
+                            } else {
+                              handleChange(row._id, col.key, e.target.value);
+                            }
+                          }}
+                          placeholder={col.placeholder}
+                          autoComplete='off'
+                          className='w-full px-2 py-1.5 text-xs border border-slate-200 rounded-md outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent bg-white min-w-22.5'
+                        />
+                      </>
                     )}
                   </td>
                 ))}

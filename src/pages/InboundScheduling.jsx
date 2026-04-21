@@ -80,6 +80,10 @@ const InboundScheduling = () => {
               editData.status === "Arrived"
                 ? new Date().toISOString()
                 : orderData.date_arrived,
+            date_processed:
+              editData.status === "Arrived"
+                ? new Date().toISOString()
+                : orderData.date_processed,
           })
           .eq("id", order.id);
 
@@ -414,6 +418,7 @@ const InboundScheduling = () => {
                 <th className='px-6 py-4'>Order Details</th>
                 <th className='px-6 py-4'>ETA</th>
                 <th className='px-6 py-4'>Status</th>
+                <th className='px-6 py-4'>Date Processed</th>
                 <th className='px-6 py-4 text-right'>Action</th>
               </tr>
             </thead>
@@ -476,15 +481,31 @@ const InboundScheduling = () => {
                       ) : (
                         <span
                           className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase ${
-                            group.status === "Arrived"
-                              ? "bg-emerald-400 text-black"
-                              : group.status === "In Transit"
-                                ? "bg-teal-400 text-black"
-                                : "bg-white text-black"
+                            group.status === 'Arrived'
+                              ? 'bg-emerald-400 text-black'
+                              : group.status === 'In Transit'
+                              ? 'bg-teal-400 text-black'
+                              : 'bg-white text-black'
                           }`}
                         >
                           {group.status}
                         </span>
+                      )}
+                    </td>
+                    <td className='p-6'>
+                      {editingId === group.firstItemId ? (
+                        <input
+                          type='datetime-local'
+                          className='rounded-lg p-2 text-sm font-black uppercase w-full'
+                          value={editData.date_processed || ''}
+                          onChange={(e) =>
+                            setEditData({ ...editData, date_processed: e.target.value })
+                          }
+                        />
+                      ) : (
+                        <div className='text-sm font-black text-slate-700 uppercase'>
+                          {group.items[0]?.date_processed ? new Date(group.items[0].date_processed).toLocaleString() : '—'}
+                        </div>
                       )}
                     </td>
                     <td className='p-6 text-right'>

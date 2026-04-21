@@ -66,6 +66,10 @@ const OutboundScheduling = () => {
         .update({
           status: editData.status,
           delivery_date: editData.delivery_date,
+          date_processed:
+            editData.status === "Completed"
+              ? new Date().toISOString()
+              : order.date_processed,
         })
         .eq("id", id);
 
@@ -153,6 +157,20 @@ const OutboundScheduling = () => {
       console.error("CRITICAL ERROR:", err.message);
       alert("SYSTEM ERROR: " + err.message);
     }
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditData({ delivery_date: "", status: "" });
+  };
+
+  const handleEdit = (tx) => {
+    setEditingId(tx.id);
+    setEditData({
+      delivery_date: tx.delivery_date || "",
+      status: tx.status || "Pending",
+      date_processed: tx.date_processed || "",
+    });
   };
 
   const filteredTransactions = transactions.filter((tx) => {
@@ -384,124 +402,132 @@ const OutboundScheduling = () => {
                 <th className='px-6 py-4'>Customer & Items</th>
                 <th className='px-6 py-4'>Delivery Date</th>
                 <th className='px-6 py-4'>Status</th>
+                <th className='px-6 py-4'>Date Processed</th>
                 <th className='px-6 py-4 text-right'>Action</th>
               </tr>
             </thead>
             <tbody>
-              {filteredTransactions.length > 0 ? (
-                filteredTransactions.map((tx) => (
-                  <tr
-                    key={tx.id}
-                    className='hover:bg-yellow-50 transition-colors'
-                  >
-                    <td className='p-6'>
-                      <p className='font-mono text-teal-700 font-black text-sm mb-1'>
-                        #{tx.so_number}
-                      </p>
-                      <p className='font-black uppercase text-lg leading-none mb-2'>
-                        {tx.customer_name}
-                      </p>
-                      <div className='flex flex-wrap gap-2 mt-2'>
-                        {tx.sales_items?.map((item, idx) => (
+              {filteredTransactions.length > 0
+                ? filteredTransactions.map((tx) => (
+                    <tr
+                      key={tx.id}
+                      className='hover:bg-yellow-50 transition-colors'
+                    >
+                      <td className='p-6'>
+                        <p className='font-mono text-teal-700 font-black text-sm mb-1'>
+                          #{tx.so_number}
+                        </p>
+                        <p className='font-black uppercase text-lg leading-none mb-2'>
+                          {tx.customer_name}
+                        </p>
+                        <div className='flex flex-wrap gap-2 mt-2'>
+                          {tx.sales_items?.map((item, idx) => (
+                            <span
+                              key={idx}
+                              className='text-[10px] bg-white px-2 py-1 rounded font-black text-black uppercase'
+                            >
+                              {item.item_name} (x{item.quantity})
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className='p-6'>
+                        {editingId === tx.id ? (
+                          <input
+                            type='date'
+                            className='rounded-lg p-2 text-sm font-black uppercase w-full'
+                            value={editData.delivery_date}
+                            onChange={(e) =>
+                              setEditData({ ...editData, delivery_date: e.target.value })
+                            }
+                          />
+                        ) : (
+                          <div className='flex items-center gap-2 text-sm font-black text-slate-700 uppercase'>
+                            <Clock size={18} strokeWidth={2.5} />{' '}
+                            {tx.delivery_date || 'NOT SCHEDULED'}
+                          </div>
+                        )}
+                      </td>
+                      <td className='p-6'>
+                        {editingId === tx.id ? (
+                          <select
+                            className='rounded-lg p-2 text-sm font-black uppercase w-full'
+                            value={editData.status}
+                            onChange={(e) =>
+                              setEditData({ ...editData, status: e.target.value })
+                            }
+                          >
+                            <option value='Pending'>Pending</option>
+                            <option value='In Transit'>In Transit</option>
+                            <option value='Completed'>Completed</option>
+                          </select>
+                        ) : (
                           <span
-                            key={idx}
-                            className='text-[10px] bg-white px-2 py-1 rounded font-black text-black uppercase'
+                            className={`px-2 py-1 rounded text-xs font-black uppercase ${
+                              tx.status === 'Completed'
+                                ? 'bg-green-100 text-green-700'
+                                : tx.status === 'In Transit'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
                           >
-                            {item.item_name} (x{item.quantity})
+                            {tx.status}
                           </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className='p-6'>
-                      {editingId === tx.id ? (
-                        <input
-                          type='date'
-                          className='rounded-lg p-2 text-sm font-black uppercase w-full'
-                          value={editData.delivery_date}
-                          onChange={(e) =>
-                            setEditData({
-                              ...editData,
-                              delivery_date: e.target.value,
-                            })
-                          }
-                        />
-                      ) : (
-                        <div className='flex items-center gap-2 text-sm font-black text-slate-700 uppercase'>
-                          <Clock size={18} strokeWidth={2.5} />{" "}
-                          {tx.delivery_date || "NOT SCHEDULED"}
-                        </div>
-                      )}
-                    </td>
-                    <td className='p-6'>
-                      {editingId === tx.id ? (
-                        <select
-                          className='rounded-lg p-2 text-sm font-black uppercase w-full'
-                          value={editData.status}
-                          onChange={(e) =>
-                            setEditData({ ...editData, status: e.target.value })
-                          }
-                        >
-                          <option value='Pending'>Pending</option>
-                          <option value='In Transit'>In Transit</option>
-                          <option value='Completed'>Completed</option>
-                        </select>
-                      ) : (
-                        <span
-                          className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase ${
-                            tx.status === "Completed"
-                              ? "bg-emerald-400 text-black"
-                              : tx.status === "In Transit"
-                                ? "bg-teal-400 text-black"
-                                : "bg-white text-black"
-                          }`}
-                        >
-                          {tx.status}
-                        </span>
-                      )}
-                    </td>
-                    <td className='p-6 text-right'>
-                      {editingId === tx.id ? (
-                        <div className='flex justify-end gap-3'>
+                        )}
+                      </td>
+                      <td className='p-6'>
+                        {editingId === tx.id ? (
+                          <input
+                            type='date'
+                            className='rounded-lg p-2 text-sm font-black uppercase w-full'
+                            value={editData.date_processed}
+                            onChange={(e) =>
+                              setEditData({ ...editData, date_processed: e.target.value })
+                            }
+                          />
+                        ) : (
+                          <span className='text-xs font-black uppercase text-slate-700'>
+                            {tx.date_processed || '—'}
+                          </span>
+                        )}
+                      </td>
+                      <td className='p-6 text-right'>
+                        {editingId === tx.id ? (
+                          <>
+                            <button
+                              className='mr-2 px-4 py-2 rounded bg-green-600 text-white text-xs font-black uppercase hover:bg-green-700 transition-colors'
+                              onClick={() => handleSave(tx.id)}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className='px-4 py-2 rounded bg-slate-300 text-slate-700 text-xs font-black uppercase hover:bg-slate-400 transition-colors'
+                              onClick={handleCancel}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
                           <button
-                            onClick={() => handleSave(tx.id)}
-                            className='bg-emerald-400 p-2 rounded-lg hover:translate-x-0.5 hover:translate-y-0.5 transition-all'
+                            onClick={() => handleEdit(tx)}
+                            className='p-3 hover:bg-slate-100 rounded-xl transition-all'
                           >
-                            <Save size={24} />
+                            <Edit3 size={24} strokeWidth={2.5} />
                           </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className='bg-red-400 p-2 rounded-lg'
-                          >
-                            <X size={24} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setEditingId(tx.id);
-                            setEditData({
-                              delivery_date: tx.delivery_date || "",
-                              status: tx.status,
-                            });
-                          }}
-                          className='p-3 hover:bg-slate-100 rounded-xl transition-all'
-                        >
-                          <Edit3 size={24} strokeWidth={2.5} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan='4'
-                    className='p-10 text-center text-xs font-black uppercase text-slate-500'
-                  >
-                    No outbound transactions found
-                  </td>
-                </tr>
-              )}
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                : (
+                    <tr>
+                      <td
+                        colSpan='5'
+                        className='p-10 text-center text-xs font-black uppercase text-slate-500'
+                      >
+                        No outbound transactions found
+                      </td>
+                    </tr>
+                  )}
             </tbody>
           </table>
           </div>

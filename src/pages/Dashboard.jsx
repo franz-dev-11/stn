@@ -142,7 +142,7 @@ const Dashboard = () => {
           .order("created_at", { ascending: true }),
         supabase
           .from("purchase_orders")
-          .select("id, created_at, status, total_amount, supplier_name")
+          .select("id, created_at, updated_at, status, total_amount, supplier_name, po_number, eta")
           .order("created_at", { ascending: true }),
         supabase
           .from("order_scheduling")
@@ -1493,8 +1493,17 @@ const Dashboard = () => {
           sub='Pending or being processed'
           onClick={() => openDrill(
             'Ongoing Purchase Orders',
-            ['Date', 'Supplier', 'Status', 'Amount'],
-            filteredPO.filter(p => { const st = (p.status || '').toLowerCase(); return st !== 'completed' && st !== 'received'; }).map(p => [new Date(p.created_at).toLocaleDateString(), p.supplier_name || '—', p.status || '—', formatCurrency(p.total_amount)])
+            ['Date', 'PO Number', 'Supplier', 'Status', 'ETA', 'Amount'],
+            filteredPO
+              .filter(p => { const st = (p.status || '').toLowerCase(); return st !== 'completed' && st !== 'received'; })
+              .map(p => [
+                new Date(p.created_at).toLocaleDateString(),
+                p.po_number || '—',
+                p.supplier_name || '—',
+                p.status || '—',
+                p.eta ? new Date(p.eta).toLocaleDateString() : (p.updated_at ? new Date(p.updated_at).toLocaleDateString() : '—'),
+                formatCurrency(p.total_amount)
+              ])
           )}
         />
         <StatCard
