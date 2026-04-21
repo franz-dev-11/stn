@@ -150,7 +150,7 @@ const Dashboard = () => {
           .order("created_at", { ascending: true }),
         supabase
           .from("order_scheduling")
-          .select("id, product_id, date_ordered, eta, status, quantity")
+          .select("id, order_number, product_id, date_ordered, eta, status, quantity, unit_cost")
           .order("date_ordered", { ascending: true }),
         supabase
           .from("product_pricing")
@@ -1781,6 +1781,8 @@ const Dashboard = () => {
         <div
           className='lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
           onClick={() => {
+            const laneRoutes = { Sales: '/outbound', Inbound: '/inbound', Procurement: '/purchase-history' };
+            const laneState = { Sales: { filterStatus: 'Active Orders' }, Inbound: {}, Procurement: {} };
             const rows = [
               ...filteredSales
                 .filter(s => (s.status || '').toLowerCase() !== 'completed')
@@ -1792,7 +1794,12 @@ const Dashboard = () => {
                 .filter(p => { const st = (p.status || '').toLowerCase(); return st !== 'completed' && st !== 'received'; })
                 .map(p => ['Procurement', p.status || '—', new Date(p.created_at).toLocaleDateString(), p.supplier_name || '—']),
             ];
-            openDrill('Order Status Overview — All Open Orders', ['Lane', 'Status', 'Date / ETA', 'Item / Supplier'], rows);
+            openDrill(
+              'Order Status Overview — All Open Orders',
+              ['Lane', 'Status', 'Date / ETA', 'Item / Supplier'],
+              rows,
+              (row) => navigate(laneRoutes[row[0]] || '/dashboard', { state: laneState[row[0]] || {} })
+            );
           }}
         >
           <div className='mb-4 flex items-center justify-between gap-3'>
@@ -1887,7 +1894,62 @@ const Dashboard = () => {
           ) : (
             <div className='space-y-3'>
               {erpOps.supplierSpendRows.map((row) => (
-                <div key={row.supplierName}>
+                <div 
+                  key={row.supplierName}
+                  onClick={() => {
+                    // Get all POs from this supplier (use all purchaseOrders, not filtered)
+                    const poNumbers = purchaseOrders
+                      .filter(p => p.supplier_name === row.supplierName)
+                      .map(p => p.po_number);
+                    
+                    // Find all items in order_scheduling for these POs and calculate stock value
+                    const itemsByCategory = {};
+                    orderScheduling
+                      .filter(os => poNumbers.includes(os.order_number))
+                      .forEach(item => {
+                        const invItem = inventory.find(inv => inv.id === item.product_id);
+                        if (invItem) {
+                          const cat = invItem.category || 'Uncategorized';
+                          if (!itemsByCategory[cat]) itemsByCategory[cat] = [];
+                          const qty = item.quantity || 0;
+                          const unitCost = item.unit_cost || 0;
+                          const stockValue = qty * unitCost;
+                          const exists = itemsByCategory[cat].find(x => x.id === invItem.id);
+                          if (!exists) {
+                            itemsByCategory[cat].push({
+                              id: invItem.id,
+                              name: invItem.name,
+                              sku: invItem.sku,
+                              qty: qty,
+                              unitCost: unitCost,
+                              stockValue: stockValue,
+                            });
+                          }
+                        }
+                      });
+                    
+                    // Sort items within each category by stock value (descending)
+                    const rows = [];
+                    Object.entries(itemsByCategory)
+                      .sort((a, b) => {
+                        const catValA = a[1].reduce((sum, item) => sum + item.stockValue, 0);
+                        const catValB = b[1].reduce((sum, item) => sum + item.stockValue, 0);
+                        return catValB - catValA; // Sort categories by total value descending
+                      })
+                      .forEach(([category, items]) => {
+                        const categoryTotal = items.reduce((sum, item) => sum + item.stockValue, 0);
+                        rows.push([`📁 ${category}`, '', '', formatCurrency(categoryTotal)]);
+                        items
+                          .sort((a, b) => b.stockValue - a.stockValue) // Sort items by stock value descending
+                          .forEach(item => {
+                            rows.push([`  ${item.name}`, item.sku || '—', item.qty, formatCurrency(item.stockValue)]);
+                          });
+                      });
+                    
+                    openDrill(`${row.supplierName} — Items by Stock Value`, ['Item / Category', 'SKU', 'Qty', 'Stock Value'], rows);
+                  }}
+                  className='cursor-pointer hover:bg-slate-50 rounded-lg p-2 transition-colors'
+                >
                   <div className='flex items-center justify-between text-[11px] font-black uppercase mb-1'>
                     <span className='text-slate-500'>{row.label}</span>
                     <span className='text-slate-900'>{formatCurrency(row.spend)}</span>
@@ -2391,26 +2453,44 @@ const Dashboard = () => {
             if (!r.product_id) return;
             pricingByProduct[r.product_id] = safeNumber(r.manual_retail_price) || safeNumber(r.suggested_srp);
           });
-          const salesRevByProduct = {};
-          filteredSales.forEach(s => {
-            salesItems
-              .filter(si => si.product_id && toDate(si.sales_transactions?.created_at) >= cutoffDate)
-              .forEach(si => {
-                const price = safeNumber(pricingByProduct[si.product_id]);
-                salesRevByProduct[si.product_id] = (salesRevByProduct[si.product_id] || 0) + safeNumber(si.quantity) * price;
-              });
-          });
+          // Helper to clean item name (strip PO number or order number suffix)
+          const cleanItemName = (name) => {
+            if (!name) return name;
+            let cleaned = name;
+            // Remove anything in parentheses at the end that contains PO/ORDER/UUID patterns
+            cleaned = cleaned.replace(/\s*\([^)]*(?:PO|ORDER|SO|INV|DOC|REF|UUID|ID)[^)]*\)\s*$/i, '');
+            // Also strip parenthetical content with UUIDs/hashes (hex chars with hyphens, 20+ chars)
+            cleaned = cleaned.replace(/\s*\([a-f0-9-]{20,}\)\s*$/i, '');
+            // Clean up trailing order references without parentheses
+            cleaned = cleaned.replace(/[\s_-]+(PO|ORDER|SO|INV|DOC|REF)[\s_-]*[A-Z0-9-]*$/i, '');
+            cleaned = cleaned.replace(/[\s-]+[A-Z]{1,4}\d{4,}[\s-]*\d*$/i, ''); // e.g., "-PO20240122" or "PO-001234"
+            cleaned = cleaned.replace(/[\s_-]+\d{6,}$/, ''); // Strip long numeric suffixes
+            return cleaned.trim();
+          };
           const itemMap = {};
+          // Add stock value from history
           filteredHistory.forEach(r => {
-            const key = r.name || r.sku || 'Unknown';
-            if (!itemMap[key]) itemMap[key] = { name: r.name || '—', sku: r.sku || '—', category: r.category || '—', value: 0 };
-            itemMap[key].value += safeNumber(r.total_value);
+            const cleanName = cleanItemName(r.name);
+            const key = cleanName || r.sku || 'Unknown';
+            if (!itemMap[key]) itemMap[key] = { name: cleanName || '—', sku: r.sku || '—', category: r.category || '—', stockValue: 0, salesValue: 0 };
+            itemMap[key].stockValue += safeNumber(r.total_value);
+          });
+          // Add sales value from sales items
+          salesItems.forEach(s => {
+            const cleanName = cleanItemName(s.item_name);
+            const key = cleanName || s.sku || 'Unknown';
+            if (!itemMap[key]) itemMap[key] = { name: cleanName || '—', sku: s.sku || '—', category: '—', stockValue: 0, salesValue: 0 };
+            itemMap[key].salesValue += safeNumber(s.unit_price || 0) * safeNumber(s.quantity || 0);
           });
           const rows = Object.values(itemMap)
-            .filter(i => i.value > 0)
-            .map(i => [i.name, i.sku, i.category, formatCurrency(i.value)])
-            .sort((a, b) => parseFloat(b[3].replace(/[^0-9.]/g,'')) - parseFloat(a[3].replace(/[^0-9.]/g,'')));
-          openDrill('Sales vs Stock Value — Items by Stock Value', ['Item', 'SKU', 'Category', 'Stock Value'], rows);
+            .filter(i => i.stockValue > 0 || i.salesValue > 0)
+            .map(i => [i.name, i.sku, i.category, formatCurrency(i.salesValue), formatCurrency(i.stockValue)])
+            .sort((a, b) => {
+              const aTotal = parseFloat(a[3].replace(/[^0-9.]/g,'')) + parseFloat(a[4].replace(/[^0-9.]/g,''));
+              const bTotal = parseFloat(b[3].replace(/[^0-9.]/g,'')) + parseFloat(b[4].replace(/[^0-9.]/g,''));
+              return bTotal - aTotal;
+            });
+          openDrill('Sales vs Stock Value — Items by Total Value', ['Item', 'SKU', 'Category', 'Sales Value', 'Stock Value'], rows);
         }}
       >
         <h3 className='font-black text-slate-800 uppercase text-xs mb-6 flex items-center gap-2'>

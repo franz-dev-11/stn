@@ -25,11 +25,20 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
   const isObject = typeof po_number === "object" && po_number !== null;
   const batchRef = isObject ? po_number.number : po_number;
 
-  // batch_number format is "${orderNumber}-${productId}" (UUID = 36 chars)
-  const uuidSuffixRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const hasUuidSuffix = batchRef && batchRef.length > 37 && uuidSuffixRegex.test(batchRef.slice(-36));
-  const orderNumber = hasUuidSuffix ? batchRef.slice(0, -37) : batchRef;
-  const productId = hasUuidSuffix ? batchRef.slice(-36) : null;
+  // batch_number format is "${orderNumber}-${productId}" where productId is UUID
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let orderNumber = batchRef;
+  let productId = null;
+  
+  // Try to parse batchRef as "orderNumber-uuid"
+  const parts = batchRef.split('-');
+  if (parts.length >= 5) {
+    const potentialUuid = parts.slice(-5).join('-');
+    if (uuidRegex.test(potentialUuid)) {
+      orderNumber = parts.slice(0, -5).join('-');
+      productId = potentialUuid;
+    }
+  }
 
   useEffect(() => {
     if (isObject && po_number.name) {
@@ -40,8 +49,13 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
   useEffect(() => {
     const fetchData = async () => {
       if (!batchRef) {
+        console.log("No batchRef provided");
         return;
       }
+
+      console.log("batchRef:", batchRef);
+      console.log("orderNumber:", orderNumber);
+      console.log("productId:", productId);
 
       try {
         // 1. Fetch Items in this PO from order_scheduling
@@ -49,22 +63,43 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
         let itemsRequest = supabase
           .from("order_scheduling")
           .select("*")
-          .eq("order_number", orderNumber);
+          .eq("po_number", orderNumber);
         if (productId) {
           itemsRequest = itemsRequest.eq("product_id", productId);
         }
 
+        console.log("Querying order_scheduling with po_number:", orderNumber, "product_id:", productId);
+
         // 2. Try to get receipt date from inventory_batches
         const batchRequest = supabase
           .from("inventory_batches")
-          .select("batch_date, current_stock")
+          .select("batch_date, current_stock, product_id")
           .eq("batch_number", batchRef)
           .maybeSingle();
 
-        const [itemsRes, batchRes] = await Promise.all([
-          itemsRequest,
-          batchRequest,
-        ]);
+        // 3. If we have productId but no productName, fetch from products table
+        let productRequest = null;
+        if (productId && !productName) {
+          productRequest = supabase
+            .from("products")
+            .select("name")
+            .eq("id", productId)
+            .maybeSingle();
+        }
+
+        const promises = [itemsRequest, batchRequest];
+        if (productRequest) promises.push(productRequest);
+
+        const [itemsRes, batchRes, productRes] = await Promise.all(promises);
+
+        console.log("productRes:", productRes);
+
+        if (productRes?.data?.name) {
+          setProductName(productRes.data.name);
+        }
+
+        console.log("itemsRes:", itemsRes);
+        console.log("batchRes:", batchRes);
 
         if (itemsRes.error) throw itemsRes.error;
 

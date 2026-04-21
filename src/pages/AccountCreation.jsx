@@ -833,13 +833,18 @@ export default function AccountCreation() {
   const [mode, setMode] = useState("single");
 
   return (
-    <div className='p-4 sm:p-6 max-w-7xl mx-auto w-full'>
-      <div className='mb-6'>
-        <h1 className='text-xl font-bold text-slate-800'>Account Creation</h1>
-        <p className='text-xs text-slate-400 mt-1'>
-          Create individual or multiple user accounts
-        </p>
-      </div>
+    <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-[#f3f4f6] min-h-screen text-black overflow-x-hidden'>
+      <div className='max-w-5xl mx-auto'>
+        <div className='flex flex-col sm:flex-row sm:justify-between sm:items-end mb-6 sm:mb-8 gap-4'>
+          <div>
+            <h1 className='text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3'>
+              <UserPlus size={32} className='text-teal-600' /> ACCOUNT CREATION
+            </h1>
+            <p className='text-slate-600 font-bold text-[8px] sm:text-xs uppercase tracking-[0.2em] mt-2'>
+              User Management | Employee Onboarding
+            </p>
+          </div>
+        </div>
 
       <div className='flex gap-2 mb-6'>
         <button
@@ -870,5 +875,6 @@ export default function AccountCreation() {
 
       {mode === "single" ? <SingleForm /> : <BatchForm />}
     </div>
+  </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
 import FullCalendar from "@fullcalendar/react";
@@ -18,10 +19,11 @@ import {
 } from "lucide-react";
 
 const OutboundScheduling = () => {
+  const location = useLocation();
   const [transactions, setTransactions] = useState([]);
   const [viewMode, setViewMode] = useState("table");
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState("All Statuses");
+  const [filterStatus, setFilterStatus] = useState(location.state?.filterStatus || "All Statuses");
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ delivery_date: "", status: "" });
   const [showSuccess, setShowSuccess] = useState(false);
@@ -194,7 +196,8 @@ const OutboundScheduling = () => {
       tx.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tx.so_number?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus =
-      filterStatus === "All Statuses" || tx.status === filterStatus;
+      filterStatus === "All Statuses" ||
+      (filterStatus === "Active Orders" ? ["Pending", "In Transit"].includes(tx.status) : tx.status === filterStatus);
     return matchesSearch && matchesStatus;
   });
 
@@ -403,6 +406,7 @@ const OutboundScheduling = () => {
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option>All Statuses</option>
+            <option>Active Orders</option>
             <option>Pending</option>
             <option>In Transit</option>
             <option>Delivered</option>
