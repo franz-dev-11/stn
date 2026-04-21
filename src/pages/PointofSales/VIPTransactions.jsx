@@ -25,26 +25,6 @@ const VIPTransactions = () => {
     fetchOrders();
   }, []);
 
-  // Auto-expand the first matching order when coming from Dashboard
-  useEffect(() => {
-    if (!autoCustomer || orders.length === 0) return;
-    const match = orders.find(o =>
-      o.customer_name.toLowerCase().includes(autoCustomer.toLowerCase())
-    );
-    if (match) toggleExpand(match.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders]);
-
-  // Auto-expand the first matching order when coming from Dashboard
-  useEffect(() => {
-    if (!autoCustomer || orders.length === 0) return;
-    const match = orders.find(o =>
-      o.customer_name.toLowerCase().includes(autoCustomer.toLowerCase())
-    );
-    if (match) toggleExpand(match.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders]);
-
   const fetchCustomers = async () => {
     const { data } = await supabase.from("vip_customers").select("id, name").order("name");
     setCustomers(data || []);
