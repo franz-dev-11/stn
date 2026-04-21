@@ -11,6 +11,7 @@ import {
 const ReturnRecords = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,6 +36,64 @@ const ReturnRecords = () => {
     };
     fetchRecords();
   }, []);
+
+  const handleResolution = async (record, status) => {
+    setUpdatingId(record.id);
+    try {
+      if (status === "replaced") {
+        // 1. Restore inbound_qty and stock_balance in hardware_inventory
+        const { data: inv, error: invFetchErr } = await supabase
+          .from("hardware_inventory")
+          .select("id, inbound_qty, stock_balance")
+          .eq("id", record.product_id)
+          .maybeSingle();
+
+        if (invFetchErr) throw new Error(invFetchErr.message);
+
+        if (inv) {
+          const { error: invUpdateErr } = await supabase
+            .from("hardware_inventory")
+            .update({
+              inbound_qty: Number(inv.inbound_qty || 0) + record.return_qty,
+              stock_balance: Number(inv.stock_balance || 0) + record.return_qty,
+            })
+            .eq("id", inv.id);
+          if (invUpdateErr) throw new Error(invUpdateErr.message);
+        }
+
+        // 2. Restore current_stock in inventory_batches
+        const batchNumber = `${record.order_number}-${record.product_id}`;
+        const { data: batch } = await supabase
+          .from("inventory_batches")
+          .select("id, current_stock")
+          .eq("batch_number", batchNumber)
+          .maybeSingle();
+
+        if (batch) {
+          await supabase
+            .from("inventory_batches")
+            .update({ current_stock: Number(batch.current_stock || 0) + record.return_qty })
+            .eq("id", batch.id);
+        }
+      }
+
+      // 3. Update resolution_status on the return record
+      const { error: statusErr } = await supabase
+        .from("return_records")
+        .update({ resolution_status: status })
+        .eq("id", record.id);
+      if (statusErr) throw new Error(statusErr.message);
+
+      setRecords((prev) =>
+        prev.map((r) => (r.id === record.id ? { ...r, resolution_status: status } : r))
+      );
+    } catch (err) {
+      console.error("Error processing resolution:", err.message);
+      alert("Error: " + err.message);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const filtered = useMemo(() => {
     return records.filter((r) => {
@@ -172,12 +231,13 @@ const ReturnRecords = () => {
                   <th className="px-5 py-4 text-right">Unit Cost</th>
                   <th className="px-5 py-4 text-right">Total Value</th>
                   <th className="px-5 py-4">Returned By</th>
+                  <th className="px-5 py-4 text-center">Resolution</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="9" className="px-6 py-12 text-center text-xs font-black uppercase text-slate-400">
+                    <td colSpan="10" className="px-6 py-12 text-center text-xs font-black uppercase text-slate-400">
                       Loading...
                     </td>
                   </tr>
@@ -220,11 +280,35 @@ const ReturnRecords = () => {
                       <td className="px-5 py-4 text-xs font-bold text-slate-700 whitespace-nowrap">
                         {r.returned_by || "—"}
                       </td>
+                      <td className="px-5 py-4 text-center whitespace-nowrap">
+                        {r.resolution_status === "replaced" ? (
+                          <span className="inline-block bg-blue-100 text-blue-700 font-black text-[10px] px-3 py-1 rounded-full uppercase">Replaced</span>
+                        ) : r.resolution_status === "refunded" ? (
+                          <span className="inline-block bg-green-100 text-green-700 font-black text-[10px] px-3 py-1 rounded-full uppercase">Refunded</span>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleResolution(r, "replaced")}
+                              disabled={updatingId === r.id}
+                              className="px-2 py-1 rounded-lg bg-blue-500 text-white font-black text-[10px] uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                            >
+                              Replaced
+                            </button>
+                            <button
+                              onClick={() => handleResolution(r, "refunded")}
+                              disabled={updatingId === r.id}
+                              className="px-2 py-1 rounded-lg bg-green-500 text-white font-black text-[10px] uppercase hover:bg-green-600 disabled:opacity-50 transition-colors"
+                            >
+                              Refunded
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="9" className="px-6 py-12 text-center">
+                    <td colSpan="10" className="px-6 py-12 text-center">
                       <p className="text-xs font-black uppercase text-slate-500">No return records found</p>
                       <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase">
                         Try adjusting your filters.

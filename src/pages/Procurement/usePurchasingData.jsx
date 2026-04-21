@@ -50,6 +50,18 @@ export const usePurchasing = () => {
 
       setItems(merged);
       setSuppliers(sup || []);
+
+      // Auto-add replenish item if navigated from Dashboard
+      const pending = sessionStorage.getItem("replenish_item");
+      if (pending) {
+        sessionStorage.removeItem("replenish_item");
+        const { id, qty } = JSON.parse(pending);
+        const product = merged.find((p) => p.id === id);
+        if (product) {
+          setCart([{ ...product, quantity: qty }]);
+          setIsCartOpen(true);
+        }
+      }
     } catch (err) {
       console.error("Fetch error:", err.message);
     }

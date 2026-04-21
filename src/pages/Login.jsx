@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { insertAuditTrail, getPerformedBy } from "../utils/auditTrail";
 import { Eye, EyeOff } from "lucide-react";
 import stnLogo from "../assets/stn logo.png";
 
@@ -56,6 +57,12 @@ export default function Login({ setCurrentUser }) {
 
       sessionStorage.setItem("stn_user", JSON.stringify(data));
       setCurrentUser(data);
+      await insertAuditTrail([{
+        action: "Login",
+        module: "Authentication",
+        performed_by: getPerformedBy(data),
+        details: `User "${data.username}" logged in.`,
+      }]);
       navigate(data.must_change_password ? "/change-password" : "/dashboard", { replace: true });
     } catch (err) {
       console.error("[Login]", err);

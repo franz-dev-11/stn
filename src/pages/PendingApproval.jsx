@@ -1,12 +1,20 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, LogOut, ShieldCheck } from "lucide-react";
+import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 import stnLogo from "../assets/stn logo.png";
 
 const PendingApproval = ({ setCurrentUser }) => {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const user = getSessionUser();
+    await insertAuditTrail([{
+      action: "Logout",
+      module: "Authentication",
+      performed_by: getPerformedBy(user),
+      details: `User "${user?.username}" signed out from pending approval screen.`,
+    }]);
     sessionStorage.removeItem("stn_user");
     if (setCurrentUser) setCurrentUser(null);
     navigate("/login", { replace: true });

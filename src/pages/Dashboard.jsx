@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import {
   Area,
@@ -69,6 +70,7 @@ const formatCurrency = (value) =>
   }).format(safeNumber(value));
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [inventory, setInventory] = useState([]);
   const [history, setHistory] = useState([]);
   const [inventoryBatches, setInventoryBatches] = useState([]);
@@ -1996,9 +1998,15 @@ const Dashboard = () => {
                     </td>
                     <td className='px-6 py-4 text-right'>
                       {item.reorderQty > 0 ? (
-                        <span className='bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-black text-[10px] animate-pulse'>
-                          REPLENISH: +{item.reorderQty}
-                        </span>
+                        <button
+                          onClick={() => {
+                            sessionStorage.setItem("replenish_item", JSON.stringify({ id: item.id, qty: item.reorderQty }));
+                            navigate("/purchasing");
+                          }}
+                          className='inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white px-3 py-1.5 rounded-lg font-black text-[10px] uppercase tracking-wide shadow-sm hover:shadow-md transition-all cursor-pointer'
+                        >
+                          <span className='text-sm leading-none'>+</span>{item.reorderQty} Replenish
+                        </button>
                       ) : (
                         <span className='text-emerald-500 font-black text-[10px] uppercase'>
                           Healthy

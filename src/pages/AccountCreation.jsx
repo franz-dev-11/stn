@@ -19,10 +19,10 @@ const EMPTY_ACCOUNT = {
   birthday: "",
   username: "",
   password: "",
-  role: "Staff",
+  role: "Cashier",
 };
 
-const ROLES = ["Staff", "Admin", "Super Admin"];
+const ROLES = ["Cashier", "Stockman", "Admin", "Super Admin"];
 
 function buildUsername(firstName, middleName, lastName, employeeId) {
   const f = firstName.trim().charAt(0);
@@ -60,13 +60,12 @@ async function getNextEmployeeId(reservedIds = []) {
   return formatEmpId(maxNum + 1);
 }
 
-function generatePassword(length = 10) {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  const arr = new Uint8Array(length);
-  crypto.getRandomValues(arr);
-  return Array.from(arr)
-    .map((b) => chars[b % chars.length])
-    .join("");
+function generatePassword(lastName = "", birthday = "") {
+  const raw = lastName.trim().toLowerCase().replace(/\s+/g, "");
+  const ln = raw.charAt(0).toUpperCase() + raw.slice(1);
+  // birthday is YYYY-MM-DD; extract year
+  const year = birthday ? birthday.split("-")[0] : "";
+  return ln && year ? `${ln}${year}!` : "";
 }
 
 const inputCls =
@@ -75,7 +74,7 @@ const inputCls =
 const labelCls = "block text-xs font-semibold text-slate-500 mb-1";
 
 function SingleForm() {
-  const [form, setForm] = useState({ ...EMPTY_ACCOUNT, password: generatePassword() });
+  const [form, setForm] = useState({ ...EMPTY_ACCOUNT, password: "" });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [idLoading, setIdLoading] = useState(true);
@@ -101,13 +100,18 @@ function SingleForm() {
       if (["first_name", "middle_name", "last_name", "employee_id"].includes(name)) {
         next.username = buildUsername(fn, mn, ln, eid);
       }
+      if (["last_name", "birthday"].includes(name)) {
+        const newLn = name === "last_name" ? value : prev.last_name;
+        const newBday = name === "birthday" ? value : prev.birthday;
+        next.password = generatePassword(newLn, newBday);
+      }
       return next;
     });
     if (result) setResult(null);
   };
 
   const regeneratePassword = () => {
-    setForm((prev) => ({ ...prev, password: generatePassword() }));
+    setForm((prev) => ({ ...prev, password: generatePassword(prev.last_name, prev.birthday) }));
   };
 
   const handleSubmit = async (e) => {
@@ -137,7 +141,7 @@ function SingleForm() {
 
       if (error) throw error;
 
-      setForm({ ...EMPTY_ACCOUNT, password: generatePassword() });
+      setForm({ ...EMPTY_ACCOUNT, password: "" });
       setResult({ type: "success", message: "Account created successfully." });
       // Refresh to next employee ID after successful creation
       setIdLoading(true);
@@ -323,7 +327,7 @@ function parseCSV(text) {
       obj[h] = vals[idx] ?? "";
     });
     // Ensure role default
-    if (!obj.role) obj.role = "Staff";
+    if (!obj.role) obj.role = "Cashier";
     return obj;
   });
 

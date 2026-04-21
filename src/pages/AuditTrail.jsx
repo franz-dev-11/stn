@@ -47,6 +47,7 @@ const AuditTrail = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterAction, setFilterAction] = useState("All");
+  const [filterUser, setFilterUser] = useState("All");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -65,6 +66,11 @@ const AuditTrail = () => {
     fetchRecords();
   }, []);
 
+  const userOptions = useMemo(() => {
+    const names = [...new Set(records.map((r) => r.performed_by).filter(Boolean))].sort();
+    return names;
+  }, [records]);
+
   const filtered = useMemo(() => {
     return records.filter((r) => {
       const search = searchTerm.toLowerCase();
@@ -77,14 +83,15 @@ const AuditTrail = () => {
         r.performed_by?.toLowerCase().includes(search);
 
       const matchesAction = filterAction === "All" || r.action === filterAction;
+      const matchesUser = filterUser === "All" || r.performed_by === filterUser;
 
       const recDate = r.created_at ? r.created_at.split("T")[0] : "";
       const matchesStart = !startDate || recDate >= startDate;
       const matchesEnd = !endDate || recDate <= endDate;
 
-      return matchesSearch && matchesAction && matchesStart && matchesEnd;
+      return matchesSearch && matchesAction && matchesUser && matchesStart && matchesEnd;
     });
-  }, [records, searchTerm, filterAction, startDate, endDate]);
+  }, [records, searchTerm, filterAction, filterUser, startDate, endDate]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice(
@@ -161,6 +168,19 @@ const AuditTrail = () => {
             <option value="SALE">Sale</option>
             <option value="STOCK_OUT">Stock-Out</option>
             <option value="RETURN">Return</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Filter size={14} className="text-slate-400" />
+          <select
+            value={filterUser}
+            onChange={(e) => { setFilterUser(e.target.value); setCurrentPage(1); }}
+            className="text-xs font-black uppercase bg-slate-50 border-0 rounded-xl px-3 py-2.5 outline-none cursor-pointer"
+          >
+            <option value="All">All Users</option>
+            {userOptions.map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
           </select>
         </div>
         <div className="flex gap-2 shrink-0">

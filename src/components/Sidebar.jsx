@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 import {
   LayoutDashboardIcon,
   UserPlus,
@@ -35,16 +36,16 @@ const Sidebar = ({
         const u = JSON.parse(stored);
         return {
           name: `${u.first_name} ${u.last_name}`.trim() || u.username || "User",
-          role: u.role || "Staff",
+          role: u.role || "Cashier",
           initial: (u.first_name || u.username || "U").charAt(0).toUpperCase(),
         };
       }
     } catch {}
-    return { name: "User", role: "Staff", initial: "U" };
+    return { name: "User", role: "Cashier", initial: "U" };
   });
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
-  const isStaff = user.role === "Staff";
+  const isStaff = user.role === "Cashier";
 
   // Standard menu sections
   const menuSections = [
@@ -122,7 +123,7 @@ const Sidebar = ({
     },
     {
       title: "STOCKOUT",
-      roles: ["Super Admin", "Admin", "Staff"],
+      roles: ["Super Admin", "Admin", "Cashier", "Stockman"],
       items: [
         {
           icon: <Calculator size={20} />,
@@ -231,8 +232,15 @@ const Sidebar = ({
             {isProfileMenuOpen && (
               <div className='absolute right-0 bottom-12 w-36 sm:w-40 rounded-lg border border-slate-200 bg-white shadow-lg py-0.5 z-30'>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setIsProfileMenuOpen(false);
+                    const user = getSessionUser();
+                    await insertAuditTrail([{
+                      action: "Logout",
+                      module: "Authentication",
+                      performed_by: getPerformedBy(user),
+                      details: `User "${user?.username}" signed out.`,
+                    }]);
                     sessionStorage.removeItem("stn_user");
                     setCurrentUser(null);
                     navigate("/login");

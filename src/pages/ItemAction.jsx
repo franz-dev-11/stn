@@ -270,12 +270,18 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
                 <p className='font-black text-white uppercase text-lg leading-tight'>
                   {selectedItem.item_name}
                 </p>
-                {currentStock != null && (
-                  <div className='mt-3 flex items-center gap-2'>
-                    <span className='text-[10px] font-black text-slate-400 uppercase tracking-widest'>Stock Qty:</span>
-                    <span className='text-sm font-black text-emerald-400'>{currentStock}</span>
+                <div className='mt-3 flex items-center gap-4'>
+                  <div className='flex items-center gap-2'>
+                    <span className='text-[10px] font-black text-slate-400 uppercase tracking-widest'>Order Qty:</span>
+                    <span className='text-sm font-black text-white'>{selectedItem.quantity ?? "—"}</span>
                   </div>
-                )}
+                  {currentStock != null && (
+                    <div className='flex items-center gap-2'>
+                      <span className='text-[10px] font-black text-slate-400 uppercase tracking-widest'>Stock Qty:</span>
+                      <span className='text-sm font-black text-emerald-400'>{currentStock}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
 

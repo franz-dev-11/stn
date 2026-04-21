@@ -123,15 +123,15 @@ function App() {
             }
           />
 
-          <Route path='/pricing' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <Pricing />} />
-          <Route path='/purchasing' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <Purchasing />} />
-          <Route path='/purchase-history' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <PurchaseHistory />} />
-          <Route path='/inbound' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <InboundDelivery />} />
+          <Route path='/pricing' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <Pricing />} />
+          <Route path='/purchasing' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <Purchasing />} />
+          <Route path='/purchase-history' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <PurchaseHistory />} />
+          <Route path='/inbound' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <InboundDelivery />} />
           <Route path='/pos' element={<RecordSales />} />
           <Route path='/invoice-history' element={<InvoiceHistory />} />
           <Route path='/outbound' element={<OutboundDelivery />} />
-          <Route path='/dashboard' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <Dashboard />} />
-          <Route path='/inventory' element={userRole === "Staff" ? <Navigate to='/pos' replace /> :
+          <Route path='/dashboard' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <Dashboard />} />
+          <Route path='/inventory' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> :
               inventoryView === "Item Action" ? (
                 <ItemAction po_number={selectedPO} setCurrentPage={setInventoryView} />
               ) : (
@@ -140,10 +140,10 @@ function App() {
             }
           />
 
-          <Route path='/account-creation' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <AccountCreation />} />
-          <Route path='/manage-users' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <UserManagement />} />
-          <Route path='/return-records' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <ReturnRecords />} />
-          <Route path='/audit-trail' element={userRole === "Staff" ? <Navigate to='/pos' replace /> : <AuditTrail />} />
+          <Route path='/account-creation' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <AccountCreation />} />
+          <Route path='/manage-users' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <UserManagement />} />
+          <Route path='/return-records' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <ReturnRecords />} />
+          <Route path='/audit-trail' element={userRole === "Cashier" ? <Navigate to='/pos' replace /> : <AuditTrail />} />
         </Route>
 
         <Route path='*' element={<Navigate to='/login' replace />} />
