@@ -56,9 +56,10 @@ const OutboundScheduling = () => {
 
       if (fetchErr) throw new Error("Fetch Order Error: " + fetchErr.message);
 
-      // Check if status is transitioning TO "Completed"
+      // Check if status is transitioning TO "Completed" or "Delivered"
       const isBecomingCompleted =
-        editData.status === "Completed" && order.status !== "Completed";
+        (editData.status === "Completed" || editData.status === "Delivered") &&
+        order.status !== "Completed" && order.status !== "Delivered";
 
       // 2. Update the main sales transaction record
       const { error: statusUpdateErr } = await supabase
@@ -67,8 +68,8 @@ const OutboundScheduling = () => {
           status: editData.status,
           delivery_date: editData.delivery_date,
           date_processed:
-            editData.status === "Completed"
-              ? order.created_at // Use created_at as date_processed
+            (editData.status === "Completed" || editData.status === "Delivered")
+              ? order.created_at
               : order.date_processed,
         })
         .eq("id", id);
@@ -201,6 +202,7 @@ const OutboundScheduling = () => {
     const statusColors = {
       Pending: { background: '#fbbf24', text: '#000' },
       'In Transit': { background: '#60a5fa', text: '#fff' },
+      Delivered: { background: '#4ade80', text: '#000' },
       Completed: { background: '#4ade80', text: '#000' },
       Cancelled: { background: '#9ca3af', text: '#fff' },
     };
@@ -208,7 +210,7 @@ const OutboundScheduling = () => {
     return filteredTransactions
       .filter((tx) => tx.delivery_date)
       .map((tx) => {
-        const displayStatus = tx.status === 'Cancelled' ? 'Cancelled' : tx.status === 'Completed' ? 'Completed' : tx.status === 'In Transit' ? 'In Transit' : 'Pending';
+        const displayStatus = tx.status === 'Cancelled' ? 'Cancelled' : (tx.status === 'Completed' || tx.status === 'Delivered') ? tx.status : tx.status === 'In Transit' ? 'In Transit' : 'Pending';
         const colors = statusColors[displayStatus] || { background: '#9ca3af', text: '#fff' };
         return {
           id: String(tx.id),
@@ -403,6 +405,7 @@ const OutboundScheduling = () => {
             <option>All Statuses</option>
             <option>Pending</option>
             <option>In Transit</option>
+            <option>Delivered</option>
             <option>Completed</option>
           </select>
         </div>
@@ -474,12 +477,13 @@ const OutboundScheduling = () => {
                           >
                             <option value='Pending'>Pending</option>
                             <option value='In Transit'>In Transit</option>
+                            <option value='Delivered'>Delivered</option>
                             <option value='Completed'>Completed</option>
                           </select>
                         ) : (
                           <span
                             className={`px-2 py-1 rounded text-xs font-black uppercase ${
-                              tx.status === 'Completed'
+                              tx.status === 'Completed' || tx.status === 'Delivered'
                                 ? 'bg-green-100 text-green-700'
                                 : tx.status === 'In Transit'
                                 ? 'bg-yellow-100 text-yellow-700'

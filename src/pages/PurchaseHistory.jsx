@@ -167,19 +167,25 @@ const PurchaseHistory = () => {
             })
             .eq("id", productId);
         }
-        // Optionally, update inventory_batches if needed
+        // Update inventory_batches: only insert if not already created by InboundScheduling
         const batchNumber = `${receipt.order_number}-${productId}`;
         const { data: batch } = await supabase
           .from("inventory_batches")
           .select("id, current_stock")
           .eq("batch_number", batchNumber)
           .maybeSingle();
-        if (batch) {
+
+        if (!batch) {
           await supabase
             .from("inventory_batches")
-            .update({ current_stock: Number(batch.current_stock || 0) + qty })
-            .eq("id", batch.id);
+            .insert([{
+              product_id: productId,
+              batch_number: batchNumber,
+              current_stock: qty,
+              batch_date: new Date().toISOString(),
+            }]);
         }
+        // If batch already exists (created by InboundScheduling on "Arrived"), don't add again
       }
 
       setBatches((prev) =>
