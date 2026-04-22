@@ -588,6 +588,7 @@ function BatchForm() {
     try {
       const payload = await Promise.all(
         rows.map(async ({ password, ...rest }) => {
+          delete rest._id;
           // Convert DD/MM/YYYY to YYYY-MM-DD for upload
           let bday = rest.birthday;
           if (typeof bday === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(bday.trim())) {
