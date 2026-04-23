@@ -25,6 +25,12 @@ const EMPTY_ACCOUNT = {
 
 const ROLES = ["Cashier", "Stockman", "Admin", "Super Admin"];
 
+function getAvailableRoles() {
+  const user = (() => { try { return JSON.parse(sessionStorage.getItem("stn_user") || "null"); } catch { return null; } })();
+  const role = user?.role === "Staff" ? "Cashier" : user?.role;
+  return role === "Admin" ? ["Cashier", "Stockman"] : ROLES;
+}
+
 function buildUsername(firstName, middleName, lastName, employeeId) {
   const f = firstName.trim().charAt(0);
   const m = middleName.trim().charAt(0);
@@ -218,7 +224,7 @@ function SingleForm() {
         <div>
           <label className={labelCls}>Role</label>
           <select name='role' value={form.role} onChange={handleChange} className={inputCls}>
-            {ROLES.map((r) => (
+            {getAvailableRoles().map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
           </select>
@@ -733,7 +739,7 @@ function BatchForm() {
                         onChange={(e) => handleChange(row._id, col.key, e.target.value)}
                         className='w-full px-2 py-1.5 text-xs border border-slate-200 rounded-md outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent bg-white min-w-22.5'
                       >
-                        {ROLES.map((r) => (
+                        {getAvailableRoles().map((r) => (
                           <option key={r} value={r}>{r}</option>
                         ))}
                       </select>

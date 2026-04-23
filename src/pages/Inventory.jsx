@@ -15,6 +15,9 @@ import {
 } from "lucide-react";
 
 const Inventory = ({ setCurrentPage, setSelectedPO }) => {
+  const _sessionUser = (() => { try { return JSON.parse(sessionStorage.getItem("stn_user") || "null"); } catch { return null; } })();
+  const _userRole = _sessionUser?.role === "Staff" ? "Cashier" : _sessionUser?.role;
+
   const [batches, setBatches] = useState([]);
   const [archiveItems, setArchiveItems] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -195,7 +198,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
       (!ledgerDateFrom || d >= ledgerDateFrom) && (!ledgerDateTo || d <= ledgerDateTo)
     );
     return matchName && matchCat && matchDate;
-  });
+  }).sort(([a], [b]) => a.localeCompare(b));
 
   const filteredBatchEntries = Object.entries(groupedByName).filter(([name, itemBatches]) => {
     const master = itemBatches[0].hardware_inventory;
@@ -206,7 +209,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
       (!batchDateFrom || d >= batchDateFrom) && (!batchDateTo || d <= batchDateTo)
     );
     return matchName && matchCat && matchDate;
-  });
+  }).sort(([a], [b]) => a.localeCompare(b));
 
   const filteredArchiveItems = archiveItems.filter((r) => {
     const matchName = r.name?.toLowerCase().includes(search.toLowerCase());
@@ -330,13 +333,15 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
               <Clock size={16} className='text-teal-600' /> {currentTime}
             </div>
           </div>
-          <button
-            onClick={handleEndDay}
-            disabled={isProcessing}
-            className='bg-slate-900 text-white px-4 sm:px-8 py-3 sm:py-4 rounded-2xl text-[8px] sm:text-xs font-black uppercase hover:bg-black transition-all shadow-xl active:scale-95 flex items-center gap-2 whitespace-nowrap'
-          >
-            {isProcessing ? "Processing..." : "End Business Day"}
-          </button>
+          {_userRole !== "Stockman" && (
+            <button
+              onClick={handleEndDay}
+              disabled={isProcessing}
+              className='bg-slate-900 text-white px-4 sm:px-8 py-3 sm:py-4 rounded-2xl text-[8px] sm:text-xs font-black uppercase hover:bg-black transition-all shadow-xl active:scale-95 flex items-center gap-2 whitespace-nowrap'
+            >
+              {isProcessing ? "Processing..." : "End Business Day"}
+            </button>
+          )}
         </div>
       </div>
 

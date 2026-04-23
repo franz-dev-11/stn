@@ -380,7 +380,7 @@ const InboundScheduling = () => {
       <div className='mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div>
           <h1 className='flex flex-wrap items-center gap-2 sm:gap-3 text-2xl sm:text-3xl font-black text-slate-900 tracking-tight'>
-            <Truck className='text-teal-600' size={32} /> INBOUND DELIVERY
+            <Truck className='text-teal-600' size={32} /> STOCKIN DELIVERY
           </h1>
           <p className='mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-slate-600'>
             Supplier Arrivals | Receiving Schedule
@@ -569,7 +569,7 @@ const InboundScheduling = () => {
                     colSpan='4'
                     className='p-10 text-center text-xs font-black uppercase text-slate-500'
                   >
-                    No inbound schedules found
+                    No stockin schedules found
                   </td>
                 </tr>
               )}

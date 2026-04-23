@@ -656,7 +656,7 @@ const Dashboard = () => {
         ).length,
       },
       {
-        lane: "Inbound",
+        lane: "Stockin",
         pending: filteredScheduling.filter(
           (row) => (row.status || "").toLowerCase() === "pending",
         ).length,
@@ -897,7 +897,7 @@ const Dashboard = () => {
         pending:    rSales.filter(r => (r.status || "").toLowerCase() === "pending").length,
         inProgress: rSales.filter(r => (r.status || "").toLowerCase() === "in transit").length,
         done:       rSales.filter(r => (r.status || "").toLowerCase() === "completed").length },
-      { lane: "Inbound",
+      { lane: "Stockin",
         pending:    rSched.filter(r => (r.status || "").toLowerCase() === "pending").length,
         inProgress: rSched.filter(r => (r.status || "").toLowerCase() === "in transit").length,
         done:       rSched.filter(r => ["completed","arrived"].includes((r.status || "").toLowerCase())).length },
@@ -946,14 +946,14 @@ const Dashboard = () => {
     const sec1 = kpiGrid([
       ["Total Items on Hand",    rOnHand.toLocaleString(),           `Stock balance: ${rStockBal.toLocaleString()}`,    "#0d9488"],
       ["Sales Revenue",          formatCurrency(rRevenue),           rangeLabel,                                        "#10b981"],
-      ["Procurement Spend",      formatCurrency(rSpend),             `${rPendingInb} pending inbound`,                  "#8b5cf6"],
+      ["Procurement Spend",      formatCurrency(rSpend),             `${rPendingInb} pending stockin`,                  "#8b5cf6"],
       ["Completion Rate",        `${rCompRate.toFixed(1)}%`,         `${rSales.length} total orders`,                   "#3b82f6"],
       ["Open Sales Orders",      rOpenSales.toLocaleString(),        "Not yet completed",                               "#f59e0b"],
       ["Open Purchase Orders",   rOpenPO.toLocaleString(),           "Pending or processing",                           "#f97316"],
-      ["Overdue Inbound",        rOverdue.toLocaleString(),          "Past ETA date",                                   "#ef4444"],
+      ["Overdue Stockin",        rOverdue.toLocaleString(),          "Past ETA date",                                   "#ef4444"],
       ["Stockout Risk Items",    kpis.risky.toLocaleString(),        "≤ 7 days runway (current)",                       "#dc2626"],
       ["Low Stock Items",        kpis.lowStock.toLocaleString(),     "Below minimum level (current)",                   "#f59e0b"],
-      ["Items Below Safe Level", rLowCoverage.toLocaleString(),      "Including pending inbound",                       "#ef4444"],
+      ["Items Below Safe Level", rLowCoverage.toLocaleString(),      "Including pending stockin",                       "#ef4444"],
       ["Supplier Count",         erpOps.supplierCoverage.toLocaleString(), "Active suppliers on file",               "#64748b"],
       ["Pending Approvals",      erpOps.pendingApprovals.toLocaleString(), "Awaiting account approval",              "#94a3b8"],
     ]);
@@ -1117,7 +1117,7 @@ const Dashboard = () => {
     const sec7 = table(
       [th("#", "center"), th("Product"), th("SKU"), th("Status", "center"), th("Ordered"), th("ETA"), th("Arriving", "center"), th("Qty", "right")],
       schedRows || "",
-      "No inbound orders in selected period"
+      "No stockin orders in selected period"
     ) + `<div class="table-footer">${rSched.length} scheduled orders &nbsp;|&nbsp; ${rOverdue} overdue</div>`;
 
     // ── SECTION 8: Supplier Spend Analysis ──
@@ -1336,7 +1336,7 @@ const Dashboard = () => {
   <div class="page-break"></div>
 
   ${section("06", "Purchase Orders", `${rPO.length} orders in selected period`, sec6)}
-  ${section("07", "Inbound Scheduling", `${rSched.length} scheduled orders — ${rOverdue} overdue`, sec7)}
+  ${section("07", "Stockin Scheduling", `${rSched.length} scheduled orders — ${rOverdue} overdue`, sec7)}
   ${section("08", "Supplier Spend Analysis", "All suppliers ranked by total spend", sec8)}
 
   <div class="page-break"></div>
@@ -1348,7 +1348,7 @@ const Dashboard = () => {
 
   ${section("11a", "Stock Health Overview", "By health status", sec11a)}
   ${section("11b", "Inventory Value by Category", "Retail value, cost value, and margin breakdown", sec11b)}
-  ${section("12", "Order Status by Lane", "Across sales, inbound, and procurement", sec12)}
+  ${section("12", "Order Status by Lane", "Across sales, stockin, and procurement", sec12)}
 
   <div class="doc-footer">
     <div class="doc-footer-left">
@@ -1781,15 +1781,15 @@ const Dashboard = () => {
         <div
           className='lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
           onClick={() => {
-            const laneRoutes = { Sales: '/outbound', Inbound: '/inbound', Procurement: '/purchase-history' };
-            const laneState = { Sales: { filterStatus: 'Active Orders' }, Inbound: {}, Procurement: {} };
+            const laneRoutes = { Sales: '/outbound', Stockin: '/inbound', Procurement: '/purchase-history' };
+            const laneState = { Sales: { filterStatus: 'Active Orders' }, Stockin: {}, Procurement: {} };
             const rows = [
               ...filteredSales
                 .filter(s => (s.status || '').toLowerCase() !== 'completed')
                 .map(s => ['Sales', s.status || '—', new Date(s.created_at).toLocaleDateString(), formatCurrency(s.total_amount)]),
               ...filteredScheduling
                 .filter(s => ['pending','in transit'].includes((s.status || '').toLowerCase()))
-                .map(s => { const inv = inventory.find(i => i.id === s.product_id); return ['Inbound', s.status || '—', s.eta ? new Date(s.eta).toLocaleDateString() : '—', inv?.name || s.product_id || '—']; }),
+                .map(s => { const inv = inventory.find(i => i.id === s.product_id); return ['Stockin', s.status || '—', s.eta ? new Date(s.eta).toLocaleDateString() : '—', inv?.name || s.product_id || '—']; }),
               ...filteredPO
                 .filter(p => { const st = (p.status || '').toLowerCase(); return st !== 'completed' && st !== 'received'; })
                 .map(p => ['Procurement', p.status || '—', new Date(p.created_at).toLocaleDateString(), p.supplier_name || '—']),

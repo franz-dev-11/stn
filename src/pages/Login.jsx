@@ -82,7 +82,7 @@ export default function Login({ setCurrentUser }) {
 
         {/* Brand */}
         <div className="mb-10 flex flex-col items-start">
-          <img src={stnLogo} alt="STN Logo" className="h-14 w-auto object-contain mb-3 brightness-0 invert opacity-90" />
+          <img src={stnLogo} alt="STN Logo" className="h-45 w-auto object-contain mb-3 brightness-0 invert opacity-90" />
         </div>
 
         <h2 className="text-2xl font-bold text-white mb-8 leading-snug">

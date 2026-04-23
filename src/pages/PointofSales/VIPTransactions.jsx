@@ -38,6 +38,22 @@ const VIPTransactions = () => {
       .order("created_at", { ascending: false });
     const loadedOrders = data || [];
     setOrders(loadedOrders);
+
+    if (loadedOrders.length > 0) {
+      const orderIds = loadedOrders.map((o) => o.id);
+      const { data: allPays } = await supabase
+        .from("vip_payments")
+        .select("*")
+        .in("order_id", orderIds)
+        .order("paid_at");
+      const payMap = {};
+      (allPays || []).forEach((p) => {
+        if (!payMap[p.order_id]) payMap[p.order_id] = [];
+        payMap[p.order_id].push(p);
+      });
+      setPayments(payMap);
+    }
+
     setLoading(false);
 
     if (autoCustomer && !hasAutoExpanded.current) {
