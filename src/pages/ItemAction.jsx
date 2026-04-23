@@ -3,7 +3,6 @@ import { supabase } from "../supabaseClient";
 import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowLeft,
-  CheckCircle,
   Layers,
   ChevronRight,
   Calendar,
@@ -12,8 +11,6 @@ import {
 const ItemAction = ({ po_number, setCurrentPage }) => {
   const [items, setItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [processing, setProcessing] = useState(false);
-  const [status, setStatus] = useState(null);
   const [batchDate, setBatchDate] = useState(null);
   const [currentStock, setCurrentStock] = useState(
     typeof po_number === "object" && po_number !== null && po_number.stock != null
@@ -57,6 +54,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
       console.log("orderNumber:", orderNumber);
       console.log("productId:", productId);
 
+      let itemsRes;
       try {
         // 1. Fetch Items in this PO from order_scheduling
         //    Filter to the specific product if productId is present
@@ -90,7 +88,8 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
         const promises = [itemsRequest, batchRequest];
         if (productRequest) promises.push(productRequest);
 
-        const [itemsRes, batchRes, productRes] = await Promise.all(promises);
+        let batchRes, productRes;
+        [itemsRes, batchRes, productRes] = await Promise.all(promises);
 
         console.log("productRes:", productRes);
 
@@ -127,28 +126,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
     };
 
     fetchData();
-  }, [batchRef]);
-
-  const handleTransaction = async (type) => {
-    if (!selectedItem) return;
-    setProcessing(true);
-    const column = type === "out" ? "outbound_qty" : "inbound_qty";
-    const currentValue = selectedItem[column] || 0;
-
-    try {
-      const { error } = await supabase
-        .from("order_scheduling")
-        .update({ [column]: currentValue + 1 })
-        .eq("id", selectedItem.id);
-
-      if (error) throw error;
-      setStatus("success");
-      setTimeout(() => setCurrentPage("Inventory"), 1500);
-    } catch (err) {
-      alert("Error: " + err.message);
-      setProcessing(false);
-    }
-  };
+  }, [batchRef, orderNumber, productId, productName]);
 
   const qrUrl = `${window.location.origin}/batch/${batchRef}`;
 
@@ -187,15 +165,6 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
       </style>
 
       <div className='bg-white p-8 rounded-3xl shadow-xl w-full max-w-md relative overflow-hidden print-area'>
-        {status === "success" && (
-          <div className='absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-3xl no-print'>
-            <CheckCircle size={60} className='text-emerald-500 mb-2' />
-            <h2 className='text-2xl font-black text-slate-800 uppercase'>
-              Updated
-            </h2>
-          </div>
-        )}
-
         <div className='flex justify-between items-center mb-6 no-print'>
           <button
             onClick={() => setCurrentPage("Inventory")}

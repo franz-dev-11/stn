@@ -129,7 +129,26 @@ const OutboundScheduling = () => {
                 invUpdateErr.message,
             );
 
-          // C. Insert into Ledger Table (best-effort — table may not exist yet)
+          // C. Deduct from inventory_batches using FIFO (oldest batch first)
+          const { data: batches } = await supabase
+            .from("inventory_batches")
+            .select("id, current_stock")
+            .eq("product_id", item.product_id)
+            .gt("current_stock", 0)
+            .order("batch_date", { ascending: true });
+
+          let remaining = Number(item.quantity);
+          for (const batch of batches || []) {
+            if (remaining <= 0) break;
+            const deduct = Math.min(remaining, Number(batch.current_stock));
+            await supabase
+              .from("inventory_batches")
+              .update({ current_stock: Number(batch.current_stock) - deduct })
+              .eq("id", batch.id);
+            remaining -= deduct;
+          }
+
+          // D. Insert into Ledger Table (best-effort — table may not exist yet)
           const { error: ledgerErr } = await supabase.from("ledger").insert([
             {
               transaction_type: "OUTBOUND",
