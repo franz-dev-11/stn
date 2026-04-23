@@ -62,14 +62,12 @@ const PurchaseHistory = () => {
     fetchData();
   }, []);
 
-  // Fetch return records for all POs/items
+  const fetchReturns = async () => {
+    const { data, error } = await supabase.from("return_records").select("*");
+    if (!error) setReturnRecords(data || []);
+  };
+
   useEffect(() => {
-    const fetchReturns = async () => {
-      const { data, error } = await supabase
-        .from("return_records")
-        .select("*");
-      if (!error) setReturnRecords(data || []);
-    };
     fetchReturns();
   }, []);
 
@@ -323,6 +321,7 @@ const PurchaseHistory = () => {
       setReturnSelections((prev) => ({ ...prev, [receipt.id]: {} }));
       alert("Return saved. Inventory has been updated.");
       fetchData();
+      fetchReturns();
     } catch (err) {
       alert("Error saving return: " + err.message);
     } finally {

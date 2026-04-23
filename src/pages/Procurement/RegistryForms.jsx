@@ -91,9 +91,10 @@ export const ItemRegistry = ({ suppliers, onRefresh }) => {
             required
             type='number'
             step='0.01'
+            min='0'
             placeholder='Price (₱)'
             className='p-4 border-2 border-black rounded-xl font-bold'
-            onChange={(e) => setForm({ ...form, price: e.target.value })}
+            onChange={(e) => setForm({ ...form, price: e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)).toString() })}
           />
           <select
             className='p-4 border-2 border-black rounded-xl font-bold'

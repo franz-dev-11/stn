@@ -6,7 +6,6 @@ import {
   Clock,
   Database,
   ArrowDownUp,
-  ArrowRight,
   ChevronDown,
   Search,
   Download,
@@ -39,7 +38,6 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
   const [selectedPOForQR, setSelectedPOForQR] = useState("");
   const [poQRData, setPOQRData] = useState(null);
   const printTableRef = useRef(null);
-
   const PAGE_SIZE = 10;
   const [ledgerPage, setLedgerPage] = useState(1);
   const [batchPage, setBatchPage] = useState(1);
@@ -536,7 +534,6 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                 <th className='px-8 py-6'>Batch Reference</th>
                 <th className='px-8 py-6 text-center'>Receipt Date</th>
                 <th className='px-8 py-6 text-center'>Remaining</th>
-                <th className='px-8 py-6 text-right pr-12'>Action</th>
               </tr>
             </thead>
             <tbody className='divide-y-2 divide-slate-50'>
@@ -563,7 +560,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                         />
                       </td>
                       <td
-                        colSpan='4'
+                        colSpan='3'
                         className='px-8 py-5 font-black text-lg uppercase italic text-slate-900'
                       >
                         {itemName}
@@ -606,22 +603,6 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                               {itemBatches[0].hardware_inventory.unit}
                             </span>
                           </td>
-                          <td className='px-8 py-6 text-right pr-12'>
-                            <button
-                              onClick={() => {
-                                setSelectedPO({
-                                  number: batch.batch_number,
-                                  date: batch.batch_date,
-                                  name: itemName,
-                                  stock: batch.current_stock,
-                                });
-                                setCurrentPage("Item Action");
-                              }}
-                              className='bg-teal-600 text-white px-6 py-3 rounded-xl font-black text-[11px] uppercase flex items-center gap-2 ml-auto hover:bg-slate-900 transition-all active:scale-95 shadow-lg shadow-teal-100'
-                            >
-                              QR SYSTEM <ArrowRight size={16} />
-                            </button>
-                          </td>
                         </tr>
                       ))}
                   </React.Fragment>
@@ -629,7 +610,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
               ) : (
                 <tr>
                   <td
-                    colSpan='5'
+                    colSpan='4'
                     className='px-8 py-10 text-center text-xs font-black uppercase text-slate-500'
                   >
                     No batch records available
@@ -743,7 +724,6 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
       {/* QR PRINT MODAL */}
       {poQRData && (
         <div className='fixed inset-0 z-50 bg-white overflow-auto flex flex-col'>
-          {/* Toolbar */}
           <div className='flex items-center justify-between px-8 py-5 border-b border-slate-100 bg-white sticky top-0 z-10'>
             <div>
               <p className='text-[10px] font-black uppercase tracking-widest text-teal-600 mb-0.5'>Batch QR Sheet</p>
@@ -765,8 +745,6 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
               </button>
             </div>
           </div>
-
-          {/* Preview Table */}
           <div className='p-8 overflow-auto'>
             <table ref={printTableRef} className='w-full border-collapse table-fixed'>
               <colgroup>

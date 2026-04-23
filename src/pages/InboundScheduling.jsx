@@ -549,6 +549,10 @@ const InboundScheduling = () => {
                             <X size={24} />
                           </button>
                         </div>
+                      ) : group.status === "Received" ? (
+                        <span className='text-[10px] font-black uppercase text-slate-400 px-3 py-1 bg-slate-100 rounded-lg'>
+                          Locked
+                        </span>
                       ) : (
                         <button
                           onClick={() => {
