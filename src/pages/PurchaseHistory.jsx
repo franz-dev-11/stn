@@ -634,7 +634,7 @@ const PurchaseHistory = () => {
                                         <th className='py-3'>SKU</th>
                                         <th className='py-3'>Description</th>
                                         <th className='py-3 text-center'>
-                                          Qty Received
+                                          Net Qty
                                         </th>
                                         <th className='py-3 text-center'>
                                           Unit
@@ -643,83 +643,98 @@ const PurchaseHistory = () => {
                                           Unit Cost
                                         </th>
                                         <th className='py-3 text-right'>
-                                          Total Value
+                                          Net Value
                                         </th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {receipt.items.map((item, idx) => {
-                                        // Aggregate return info for this item
                                         const returns = returnRecords.filter(r => r.order_number === receipt.order_number && r.product_id === item.product_id);
-                                        const returnedQty = returns.filter(r => !r.resolution_status || r.resolution_status === "pending").reduce((s, r) => s + (r.return_qty || 0), 0);
-                                        const replacedQty = returns.filter(r => r.resolution_status === "replaced").reduce((s, r) => s + (r.return_qty || 0), 0);
                                         const refundedQty = returns.filter(r => r.resolution_status === "refunded").reduce((s, r) => s + (r.return_qty || 0), 0);
+                                        const netQty = Math.max(0, item.quantity - refundedQty);
+                                        const colCount = returnMode[receipt.id] ? 7 : 6;
                                         return (
-                                          <tr
-                                            key={idx}
-                                            className={`border-b border-slate-100 transition-colors ${
+                                          <React.Fragment key={idx}>
+                                            <tr className={`border-b border-slate-100 transition-colors ${
                                               returnMode[receipt.id] && (returnSelections[receipt.id]?.[item.id] || 0) > 0
                                                 ? 'bg-rose-50'
                                                 : ''
-                                            }`}
-                                          >
-                                            {returnMode[receipt.id] && (
-                                              <td className='py-4 px-4' onClick={(e) => e.stopPropagation()}>
-                                                <input
-                                                  type='number'
-                                                  min={0}
-                                                  max={item.quantity}
-                                                  value={returnSelections[receipt.id]?.[item.id] ?? ''}
-                                                  placeholder='0'
-                                                  onChange={(e) => handleSetReturnQty(receipt.id, item.id, e.target.value, item.quantity)}
-                                                  className='w-14 px-2 py-1 text-xs font-black text-center border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent'
-                                                />
-                                                {item.quantity > 0 && (
-                                                  <p className='text-[9px] text-slate-400 font-bold text-center mt-0.5'>of {item.quantity}</p>
-                                                )}
+                                            }`}>
+                                              {returnMode[receipt.id] && (
+                                                <td className='py-4 px-4' onClick={(e) => e.stopPropagation()}>
+                                                  <input
+                                                    type='number'
+                                                    min={0}
+                                                    max={item.quantity}
+                                                    value={returnSelections[receipt.id]?.[item.id] ?? ''}
+                                                    placeholder='0'
+                                                    onChange={(e) => handleSetReturnQty(receipt.id, item.id, e.target.value, item.quantity)}
+                                                    className='w-14 px-2 py-1 text-xs font-black text-center border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent'
+                                                  />
+                                                  {item.quantity > 0 && (
+                                                    <p className='text-[9px] text-slate-400 font-bold text-center mt-0.5'>of {item.quantity}</p>
+                                                  )}
+                                                </td>
+                                              )}
+                                              <td className='py-4 px-4 text-[10px] font-mono font-bold text-slate-600'>
+                                                #{item.hardware_inventory?.sku}
                                               </td>
+                                              <td className='py-4 text-sm font-black uppercase'>
+                                                {item.hardware_inventory?.name}
+                                              </td>
+                                              <td className='py-4 text-center font-black'>
+                                                {refundedQty > 0 ? (
+                                                  <>
+                                                    {netQty}
+                                                    <span className='block text-[9px] text-slate-400 font-bold'>of {item.quantity} ordered</span>
+                                                  </>
+                                                ) : item.quantity}
+                                              </td>
+                                              <td className='py-4 text-center text-xs font-bold text-slate-600 uppercase'>
+                                                {item.hardware_inventory?.unit}
+                                              </td>
+                                              <td className='py-4 text-right text-sm font-bold'>
+                                                ₱{item.unit_cost?.toLocaleString()}
+                                              </td>
+                                              <td className='py-4 text-right text-sm font-black'>
+                                                {refundedQty > 0 ? (
+                                                  <>
+                                                    ₱{(item.unit_cost * netQty).toLocaleString()}
+                                                    <span className='block text-[9px] text-rose-500 font-bold'>-₱{(item.unit_cost * refundedQty).toLocaleString()} refunded</span>
+                                                  </>
+                                                ) : `₱${(item.unit_cost * item.quantity).toLocaleString()}`}
+                                              </td>
+                                            </tr>
+                                            {returns.length > 0 && (
+                                              <tr className='bg-rose-50 border-b border-rose-100'>
+                                                <td colSpan={colCount} className='px-8 py-2'>
+                                                  <p className='text-[9px] font-black uppercase text-rose-600 mb-1'>Return History</p>
+                                                  <div className='space-y-1'>
+                                                    {returns.map((r, rIdx) => (
+                                                      <div key={rIdx} className='flex items-center gap-4 text-[9px] font-bold text-rose-700'>
+                                                        <span>{r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</span>
+                                                        <span>Qty: {r.return_qty}</span>
+                                                        <span>by {r.returned_by || '—'}</span>
+                                                        <span className={`px-1.5 py-0.5 rounded uppercase ${
+                                                          r.resolution_status === 'refunded' ? 'bg-blue-100 text-blue-700'
+                                                          : r.resolution_status === 'replaced' ? 'bg-emerald-100 text-emerald-700'
+                                                          : 'bg-rose-100 text-rose-700'
+                                                        }`}>
+                                                          {r.resolution_status || 'Pending'}
+                                                        </span>
+                                                        {r.resolution_status === 'refunded' && r.unit_cost && r.return_qty && (
+                                                          <span className='text-rose-500'>-₱{(r.unit_cost * r.return_qty).toLocaleString()} deducted</span>
+                                                        )}
+                                                        {r.resolution_status === 'replaced' && (
+                                                          <span className='text-emerald-600'>replacement sent</span>
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </td>
+                                              </tr>
                                             )}
-                                            <td className='py-4 px-4 text-[10px] font-mono font-bold text-slate-600'>
-                                              #{item.hardware_inventory?.sku}
-                                            </td>
-                                            <td className='py-4 text-sm font-black uppercase'>
-                                              {item.hardware_inventory?.name}
-                                              {/* Return info badges */}
-                                              <div className='flex flex-wrap gap-1 mt-1'>
-                                                {returnedQty > 0 && (
-                                                  <span className='inline-block bg-rose-100 text-rose-700 text-[9px] font-bold px-2 py-0.5 rounded'>
-                                                    Returned: {returnedQty}
-                                                  </span>
-                                                )}
-                                                {replacedQty > 0 && (
-                                                  <span className='inline-block bg-emerald-100 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded'>
-                                                    Replaced: {replacedQty}
-                                                  </span>
-                                                )}
-                                                {refundedQty > 0 && (
-                                                  <span className='inline-block bg-blue-100 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded'>
-                                                    Refunded: {refundedQty}
-                                                  </span>
-                                                )}
-                                              </div>
-                                            </td>
-                                            <td className='py-4 text-center font-black'>
-                                              {item.quantity}
-                                            </td>
-                                            <td className='py-4 text-center text-xs font-bold text-slate-600 uppercase'>
-                                              {item.hardware_inventory?.unit}
-                                            </td>
-                                            <td className='py-4 text-right text-sm font-bold'>
-                                              ₱{item.unit_cost?.toLocaleString()}
-                                            </td>
-                                            <td className='py-4 text-right text-sm font-black'>
-                                              ₱
-                                              {(
-                                                item.unit_cost *
-                                                item.quantity
-                                              ).toLocaleString()}
-                                            </td>
-                                          </tr>
+                                          </React.Fragment>
                                         );
                                       })}
                                     </tbody>
