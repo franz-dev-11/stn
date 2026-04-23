@@ -320,22 +320,13 @@ const ReturnRecords = () => {
                         ) : r.resolution_status === "refunded" ? (
                           <span className="inline-block bg-green-100 text-green-700 font-black text-[10px] px-3 py-1 rounded-full uppercase">Refunded</span>
                         ) : (
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => handleResolution(r, "replaced")}
-                              disabled={updatingId === r.id}
-                              className="px-2 py-1 rounded-lg bg-blue-500 text-white font-black text-[10px] uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors"
-                            >
-                              Replaced
-                            </button>
-                            <button
-                              onClick={() => handleResolution(r, "refunded")}
-                              disabled={updatingId === r.id}
-                              className="px-2 py-1 rounded-lg bg-green-500 text-white font-black text-[10px] uppercase hover:bg-green-600 disabled:opacity-50 transition-colors"
-                            >
-                              Refunded
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => handleResolution(r, "replaced")}
+                            disabled={updatingId === r.id}
+                            className="px-2 py-1 rounded-lg bg-blue-500 text-white font-black text-[10px] uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                          >
+                            Replaced
+                          </button>
                         )}
                       </td>
                     </tr>

@@ -288,7 +288,23 @@ const PurchaseHistory = () => {
             .eq("id", batch.id);
         }
 
-        // 3. Insert audit trail row
+        // 3. Auto-deduct return value from PO total
+        const refundValue = returnQty * (item.unit_cost || 0);
+        if (refundValue > 0) {
+          const { data: po } = await supabase
+            .from("purchase_orders")
+            .select("id, total_amount")
+            .eq("po_number", orderNumber)
+            .maybeSingle();
+          if (po) {
+            await supabase
+              .from("purchase_orders")
+              .update({ total_amount: Math.max(0, Number(po.total_amount || 0) - refundValue) })
+              .eq("id", po.id);
+          }
+        }
+
+        // 4. Insert audit trail row (auto-resolved as refunded)
         const { error: returnErr } = await supabase.from("return_records").insert([{
           order_number: orderNumber,
           product_id: productId,
@@ -298,6 +314,7 @@ const PurchaseHistory = () => {
           return_qty: returnQty,
           unit_cost: item.unit_cost || null,
           returned_by: returnedBy,
+          resolution_status: "refunded",
         }]);
         if (returnErr) throw new Error(`Audit insert error: ${returnErr.message}`);
       }
@@ -451,6 +468,7 @@ const PurchaseHistory = () => {
                       (s) => s.name === receipt.supplier,
                     );
                     const isExpanded = expandedBatch === receipt.id;
+                    const hasReturn = returnRecords.some(r => r.order_number === receipt.order_number);
                     return (
                       <React.Fragment key={receipt.id}>
                         <tr
@@ -519,7 +537,7 @@ const PurchaseHistory = () => {
                                     {receipt.supplier}
                                   </h2>
                                   <div className='flex gap-2'>
-                                    {receipt.status !== "Received" && receipt.status !== "Completed" && (
+                                    {receipt.status === "Arrived" && (
                                       <button
                                         onClick={(e) => handleMarkReceived(e, receipt)}
                                         className='bg-emerald-500 text-white px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-emerald-600 transition-all'
@@ -527,7 +545,7 @@ const PurchaseHistory = () => {
                                         <CheckCircle2 size={14} /> Mark Received
                                       </button>
                                     )}
-                                    {receipt.status === 'Arrived' && (
+                                    {receipt.status === 'Arrived' && !hasReturn && (
                                       <>
                                       <button
                                         onClick={(e) => { e.stopPropagation(); handleToggleReturnMode(receipt.id); }}

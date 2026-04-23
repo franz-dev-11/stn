@@ -25,16 +25,27 @@ const Purchasing = () => {
 
   // Delete item function
   const deleteItem = async (id) => {
+    if (!window.confirm("Delete this item and all its associated records?")) return;
     try {
-      // Delete from product_pricing first
       await supabase.from("product_pricing").delete().eq("product_id", id);
-      // Then delete from hardware_inventory
+      await supabase.from("order_scheduling").delete().eq("product_id", id);
+      await supabase.from("inventory_batches").delete().eq("product_id", id);
       const { error } = await supabase
         .from("hardware_inventory")
         .delete()
         .eq("id", id);
       if (error) throw error;
-      // Refresh data
+      data.fetchData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const deleteSupplier = async (id, name) => {
+    if (!window.confirm(`Delete supplier "${name}"?`)) return;
+    try {
+      const { error } = await supabase.from("suppliers").delete().eq("id", id);
+      if (error) throw error;
       data.fetchData();
     } catch (err) {
       alert(err.message);
@@ -355,6 +366,8 @@ const Purchasing = () => {
       )}
       {data.view === "addSupplier" && (
         <SupplierRegistry
+          suppliers={data.suppliers}
+          onDelete={deleteSupplier}
           onRefresh={() => {
             data.fetchData();
             data.setView("browse");

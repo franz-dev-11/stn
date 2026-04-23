@@ -132,11 +132,9 @@ const RecordSales = () => {
       prev.map((item) => {
         if (item.cartId === cartId) {
           let newQty;
-          if (typeof deltaOrValue === "number" && deltaOrValue < 0 || deltaOrValue > 0) {
-            // It's a delta (from plus/minus buttons)
+          if (typeof deltaOrValue === "number") {
             newQty = Math.max(1, item.quantity + deltaOrValue);
           } else {
-            // It's a direct value (from input field)
             newQty = Math.max(1, parseInt(deltaOrValue) || 1);
           }
           if (newQty > maxStock) return item;

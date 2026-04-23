@@ -76,7 +76,7 @@ const InboundPricing = () => {
   };
 
   const handleMarginChange = (val) => {
-    const margin = parseFloat(val || 0);
+    const margin = Math.max(0, parseFloat(val || 0));
     const cost = parseFloat(editData.supplier_cost || 0);
     const srp = margin < 100 ? cost / (1 - margin / 100) : cost;
 
@@ -200,12 +200,13 @@ const InboundPricing = () => {
                       <input
                         type='number'
                         step='0.01'
+                        min='0'
                         className='w-20 sm:w-24 border-2 border-teal-400 rounded p-1 sm:p-2 font-black text-xs sm:text-sm text-black outline-none bg-white'
                         value={parseFloat(editData.supplier_cost) || ''}
                         onChange={(e) =>
                           setEditData({
                             ...editData,
-                            supplier_cost: e.target.value === '' ? 0 : parseFloat(e.target.value),
+                            supplier_cost: e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value)),
                           })
                         }
                       />
@@ -221,9 +222,10 @@ const InboundPricing = () => {
                       <input
                         type='number'
                         step='0.01'
+                        min='0'
                         className='w-14 sm:w-16 border-2 border-slate-300 rounded p-1 sm:p-2 font-black text-xs sm:text-sm text-black outline-none bg-white'
                         value={parseFloat(editData.margin_percent) || ''}
-                        onChange={(e) => handleMarginChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                        onChange={(e) => handleMarginChange(e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value)))}
                       />
                     ) : (
                       <span className='text-[8px] sm:text-xs font-black text-slate-500'>
@@ -252,12 +254,13 @@ const InboundPricing = () => {
                       <input
                         type='number'
                         step='0.01'
+                        min='0'
                         className='w-20 sm:w-24 border-2 border-emerald-400 rounded p-1 sm:p-2 font-black text-xs sm:text-sm text-black outline-none bg-white'
                         value={parseFloat(editData.manual_retail_price) || ''}
                         onChange={(e) =>
                           setEditData({
                             ...editData,
-                            manual_retail_price: e.target.value === '' ? 0 : parseFloat(e.target.value),
+                            manual_retail_price: e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value)),
                           })
                         }
                       />
