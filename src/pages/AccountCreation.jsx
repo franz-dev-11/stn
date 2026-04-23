@@ -138,6 +138,7 @@ function SingleForm() {
         last_name: rest.last_name.trim(),
         username: rest.username.trim(),
         password: hashed,
+        must_change_password: true,
       });
 
       if (error) throw error;
@@ -608,6 +609,7 @@ function BatchForm() {
             birthday: bday,
             username: rest.username.trim(),
             password: await hashPassword(password),
+            must_change_password: true,
           };
         })
       );

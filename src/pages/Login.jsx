@@ -4,6 +4,7 @@ import { supabase } from "../supabaseClient";
 import { insertAuditTrail, getPerformedBy } from "../utils/auditTrail";
 import { Eye, EyeOff } from "lucide-react";
 import stnLogo from "../assets/stn logo.png";
+import aldenaire from "../assets/AldenairE1.png";
 
 async function hashPassword(password) {
   const encoder = new TextEncoder();
@@ -189,9 +190,7 @@ export default function Login({ setCurrentUser }) {
 
         {/* Center brand mark */}
         <div className="relative z-10 flex flex-col items-center select-none">
-          <div className="w-36 h-36 bg-[#1b6b5c] rounded-2xl flex items-center justify-center shadow-2xl mb-6">
-            <img src={stnLogo} alt="STN" className="h-20 w-auto object-contain brightness-0 invert" />
-          </div>
+          <img src={aldenaire} alt="Aldenaire" className="w-48 h-48 object-contain rounded-2xl shadow-2xl mb-6" />
           <p className="text-[10px] font-bold tracking-[0.3em] text-slate-400 uppercase">Powered by STN</p>
         </div>
 
