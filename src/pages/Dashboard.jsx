@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import {
@@ -94,9 +94,6 @@ const Dashboard = () => {
   const REORDER_PAGE_SIZE = 10;
 
   const [drillDown, setDrillDown] = useState(null);
-  const [reportHTML, setReportHTML] = useState("");
-  const [reportOpen, setReportOpen] = useState(false);
-  const reportIframeRef = useRef(null);
   const [reportPickerOpen, setReportPickerOpen] = useState(false);
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
@@ -173,6 +170,8 @@ const Dashboard = () => {
       if (pricingRes.error) throw pricingRes.error;
       if (profilesRes.error) throw profilesRes.error;
       if (suppliersRes.error) throw suppliersRes.error;
+      if (vipOrdersRes.error) throw vipOrdersRes.error;
+      if (vipPaymentsRes.error) throw vipPaymentsRes.error;
 
       setInventory(invRes.data || []);
       setHistory(histRes.data || []);
@@ -196,6 +195,18 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
+    const channel = supabase
+      .channel("dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hardware_inventory" }, fetchDashboardData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_batches" }, fetchDashboardData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_transactions" }, fetchDashboardData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_items" }, fetchDashboardData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders" }, fetchDashboardData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_scheduling" }, fetchDashboardData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "vip_orders" }, fetchDashboardData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "vip_payments" }, fetchDashboardData)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, [fetchDashboardData]);
 
   const categoryOptions = useMemo(() => {
@@ -516,14 +527,14 @@ const Dashboard = () => {
       0,
     );
     const completedSales = filteredSales.filter(
-      (row) => row.status === "Completed",
+      (row) => (row.status || "").toLowerCase() === "completed",
     ).length;
     const completionRate = filteredSales.length
       ? (completedSales / filteredSales.length) * 100
       : 0;
 
     const pendingInbound = filteredScheduling.filter((row) =>
-      ["Pending", "In Transit"].includes(row.status),
+      ["pending", "in transit"].includes((row.status || "").toLowerCase()),
     ).length;
 
     return {
@@ -542,7 +553,7 @@ const Dashboard = () => {
     filteredSales,
     filteredScheduling,
     inventorySegments,
-    stockoutRiskItems.length,
+    stockoutRiskItems,
   ]);
 
   const pendingInboundByProduct = useMemo(() => {
@@ -1507,31 +1518,14 @@ const Dashboard = () => {
           value={erpOps.openSalesOrders.toLocaleString()}
           icon={<Activity className='text-cyan-600' />}
           sub='Orders not yet completed'
-          onClick={() => openDrill(
-            'Ongoing Sales Orders',
-            ['Date', 'Status', 'Amount'],
-            filteredSales.filter(s => (s.status || '').toLowerCase() !== 'completed').map(s => [new Date(s.created_at).toLocaleDateString(), s.status || '—', formatCurrency(s.total_amount)])
-          )}
+          onClick={() => navigate('/outbound', { state: { filterStatus: 'Active Orders' } })}
         />
         <StatCard
           label='Ongoing Purchase Orders'
           value={erpOps.openPurchaseOrders.toLocaleString()}
           icon={<ShoppingCart className='text-indigo-600' />}
           sub='Pending or being processed'
-          onClick={() => openDrill(
-            'Ongoing Purchase Orders',
-            ['Date', 'PO Number', 'Supplier', 'Status', 'ETA', 'Amount'],
-            filteredPO
-              .filter(p => { const st = (p.status || '').toLowerCase(); return st !== 'completed' && st !== 'received'; })
-              .map(p => [
-                new Date(p.created_at).toLocaleDateString(),
-                p.po_number || '—',
-                p.supplier_name || '—',
-                p.status || '—',
-                p.eta ? new Date(p.eta).toLocaleDateString() : (p.updated_at ? new Date(p.updated_at).toLocaleDateString() : '—'),
-                formatCurrency(p.total_amount)
-              ])
-          )}
+          onClick={() => navigate('/inbound', { state: { filterStatus: 'Pending' } })}
         />
         <StatCard
           label='Top Selling Product'
@@ -1706,7 +1700,7 @@ const Dashboard = () => {
         <div
           className='bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
           onClick={() => {
-            const allItems = inventorySegments.flatMap((seg, index) =>
+            const allItems = inventorySegments.flatMap((seg) =>
               (seg.items || []).map(i => [
                 i.name,
                 i.category || '—',
@@ -1782,7 +1776,7 @@ const Dashboard = () => {
           className='lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow'
           onClick={() => {
             const laneRoutes = { Sales: '/outbound', Stockin: '/inbound', Procurement: '/purchase-history' };
-            const laneState = { Sales: { filterStatus: 'Active Orders' }, Stockin: {}, Procurement: {} };
+            const laneState = { Sales: { filterStatus: 'Active Orders' }, Stockin: { filterStatus: 'Pending' }, Procurement: {} };
             const rows = [
               ...filteredSales
                 .filter(s => (s.status || '').toLowerCase() !== 'completed')

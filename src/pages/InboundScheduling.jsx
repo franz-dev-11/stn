@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
 import FullCalendar from "@fullcalendar/react";
@@ -14,19 +15,45 @@ import {
   Calendar as CalendarIcon,
   Search,
   Filter,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 const InboundScheduling = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [viewMode, setViewMode] = useState("table");
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState("All Statuses");
+  const [filterStatus, setFilterStatus] = useState(location.state?.filterStatus || "All Statuses");
+  const [expandedPOs, setExpandedPOs] = useState(new Set());
+  const togglePO = (orderNumber) =>
+    setExpandedPOs((prev) => {
+      const next = new Set(prev);
+      next.has(orderNumber) ? next.delete(orderNumber) : next.add(orderNumber);
+      return next;
+    });
+  const [statusChanged, setStatusChanged] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.filterStatus && !statusChanged) {
+      setFilterStatus(location.state.filterStatus);
+      setStatusChanged(true);
+    }
+  }, [location.state?.filterStatus]);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ eta: "", status: "" });
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     fetchOrders();
+    const channel = supabase
+      .channel("inbound-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_scheduling" }, fetchOrders)
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders" }, fetchOrders)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_batches" }, fetchOrders)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const fetchOrders = async () => {
@@ -39,7 +66,6 @@ const InboundScheduling = () => {
 
   const handleSave = async (firstItemId) => {
     try {
-      console.log("Starting save process for Order Group with first ID:", firstItemId);
 
       // Get all items from the order group
       const groupItems = orders.filter(
@@ -66,9 +92,6 @@ const InboundScheduling = () => {
           .maybeSingle();
         if (poErr) throw new Error("Fetch PO Error: " + poErr.message);
         poCreatedAt = poData?.created_at || null;
-        // Debug log
-        console.log("[DEBUG] Fetched PO created_at for orderNumber:", orderNumber, "=>", poCreatedAt);
-        alert(`[DEBUG] Fetched PO created_at for orderNumber: ${orderNumber} => ${poCreatedAt}`);
       }
 
       // Update all items in this order group
@@ -240,25 +263,34 @@ const InboundScheduling = () => {
       Pending: { background: '#fbbf24', text: '#000' },
       'In Transit': { background: '#60a5fa', text: '#fff' },
       Arrived: { background: '#4ade80', text: '#000' },
+      Received: { background: '#6366f1', text: '#fff' },
       Cancelled: { background: '#9ca3af', text: '#fff' },
     };
-    
-    return filteredOrders
-      .filter((o) => o.eta)
-      .map((o) => {
-        const displayStatus = o.status === 'Cancelled' ? 'Cancelled' : o.status === 'Arrived' ? 'Arrived' : o.status === 'In Transit' ? 'In Transit' : 'Pending';
-        const colors = statusColors[displayStatus] || { background: '#9ca3af', text: '#fff' };
-        return {
-          id: String(o.id),
-          title: `${o.order_number} • ${o.item_name}`,
-          start: o.eta,
-          allDay: true,
-          backgroundColor: colors.background,
-          textColor: colors.text,
-          borderColor: colors.background,
-          extendedProps: { status: displayStatus },
-        };
-      });
+
+    // Group by order_number — one calendar event per PO
+    const grouped = {};
+    filteredOrders.filter((o) => o.eta).forEach((o) => {
+      const key = o.order_number;
+      if (!grouped[key]) {
+        grouped[key] = { order_number: o.order_number, eta: o.eta, status: o.status, items: [] };
+      }
+      grouped[key].items.push(o);
+    });
+
+    return Object.values(grouped).map((group) => {
+      const displayStatus = group.status === 'Cancelled' ? 'Cancelled' : group.status === 'Received' ? 'Received' : group.status === 'Arrived' ? 'Arrived' : group.status === 'In Transit' ? 'In Transit' : 'Pending';
+      const colors = statusColors[displayStatus] || { background: '#9ca3af', text: '#fff' };
+      return {
+        id: group.order_number,
+        title: `${group.order_number} · ${group.items.length} item${group.items.length !== 1 ? 's' : ''}`,
+        start: group.eta,
+        allDay: true,
+        backgroundColor: colors.background,
+        textColor: colors.text,
+        borderColor: colors.background,
+        extendedProps: { status: displayStatus, orderNumber: group.order_number },
+      };
+    });
   }, [filteredOrders]);
 
   return (
@@ -464,24 +496,34 @@ const InboundScheduling = () => {
                     className='hover:bg-yellow-50 transition-colors'
                   >
                     <td className='p-6'>
-                      <span className='font-mono text-teal-700 font-black text-sm'>
-                        #{group.order_number}
-                      </span>
-                      <p className='font-black uppercase text-sm leading-none mb-3 text-slate-700'>
-                        {group.items.length} item{group.items.length !== 1 ? 's' : ''}
-                      </p>
-                      <div className='space-y-2'>
-                        {group.items.map((item) => (
-                          <div key={item.id} className='text-sm'>
-                            <p className='font-black uppercase text-slate-900'>
-                              {item.item_name}
-                            </p>
-                            <p className='text-[10px] font-bold text-slate-500 uppercase'>
-                              {group.supplier} | Qty: {item.quantity}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
+                      <button
+                        onClick={() => togglePO(group.order_number)}
+                        className='flex items-center gap-2 w-full text-left mb-1'
+                      >
+                        {expandedPOs.has(group.order_number)
+                          ? <ChevronDown size={14} className='shrink-0 text-teal-600' />
+                          : <ChevronRight size={14} className='shrink-0 text-teal-600' />}
+                        <span className='font-mono text-teal-700 font-black text-sm'>
+                          #{group.order_number}
+                        </span>
+                        <span className='font-bold text-[10px] text-slate-500 uppercase'>
+                          {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                        </span>
+                      </button>
+                      {expandedPOs.has(group.order_number) && (
+                        <div className='space-y-2 mt-2 pl-5'>
+                          {group.items.map((item) => (
+                            <div key={item.id} className='text-sm'>
+                              <p className='font-black uppercase text-slate-900'>
+                                {item.item_name}
+                              </p>
+                              <p className='text-[10px] font-bold text-slate-500 uppercase'>
+                                {group.supplier} | Qty: {item.quantity}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className='p-6'>
                       {editingId === group.firstItemId ? (
@@ -516,10 +558,14 @@ const InboundScheduling = () => {
                         <span
                           className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase ${
                             group.status === 'Arrived'
-                              ? 'bg-emerald-400 text-black'
+                              ? 'bg-green-400 text-black'
                               : group.status === 'In Transit'
-                              ? 'bg-teal-400 text-black'
-                              : 'bg-white text-black'
+                              ? 'bg-blue-400 text-white'
+                              : group.status === 'Received'
+                              ? 'bg-indigo-500 text-white'
+                              : group.status === 'Cancelled'
+                              ? 'bg-gray-400 text-white'
+                              : 'bg-amber-400 text-black'
                           }`}
                         >
                           {group.status}
@@ -595,6 +641,10 @@ const InboundScheduling = () => {
             events={calendarEvents}
             eventDisplay='block'
             dayMaxEvents={3}
+            eventClick={(info) => {
+              const orderNum = info.event.extendedProps.orderNumber;
+              navigate("/purchase-history", { state: { orderNumber: orderNum } });
+            }}
           />
         </div>
       )}

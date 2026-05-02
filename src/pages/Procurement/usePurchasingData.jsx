@@ -69,6 +69,13 @@ export const usePurchasing = () => {
 
   useEffect(() => {
     fetchData();
+    const channel = supabase
+      .channel("purchasing-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hardware_inventory" }, fetchData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_batches" }, fetchData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "suppliers" }, fetchData)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, [fetchData]);
 
   const addToCart = (product, quantity) => {

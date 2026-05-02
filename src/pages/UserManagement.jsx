@@ -35,7 +35,13 @@ const UserManagement = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
+    const channel = supabase
+      .channel("users-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, fetchUsers)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, [fetchUsers]);
 
   const handleResetPassword = async (user) => {

@@ -21,7 +21,6 @@ import {
 import stnLogo from "../assets/stn logo.png";
 
 const Sidebar = ({
-  currentPage,
   setCurrentPage,
   isMobileMenuOpen,
   setIsMobileMenuOpen,
@@ -42,12 +41,10 @@ const Sidebar = ({
           initial: (u.first_name || u.username || "U").charAt(0).toUpperCase(),
         };
       }
-    } catch {}
+    } catch { /* ignore parse errors */ }
     return { name: "User", role: "Cashier", initial: "U" };
   });
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-
-  const isStaff = user.role === "Cashier";
 
   // Standard menu sections
   const menuSections = [
@@ -103,16 +100,16 @@ const Sidebar = ({
           path: "/purchasing",
         },
         {
-          icon: <History size={20} />,
-          label: "Procurement History",
-          path: "/purchase-history",
-        },
-        {
           icon: <Truck size={20} />,
           label: "Stockin Delivery",
           path: "/inbound",
         },
         {
+          icon: <History size={20} />,
+          label: "Procurement History",
+          path: "/purchase-history",
+        },
+              {
           icon: <RotateCcw size={20} />,
           label: "Return Records",
           path: "/return-records",
@@ -140,11 +137,6 @@ const Sidebar = ({
           path: "/pos",
         },
         {
-          icon: <History size={20} />,
-          label: "Invoice History",
-          path: "/invoice-history",
-        },
-        {
           icon: <Truck size={20} />,
           label: "Stockout Delivery",
           path: "/outbound",
@@ -158,6 +150,11 @@ const Sidebar = ({
           icon: <History size={20} />,
           label: "VIP Transactions",
           path: "/vip-transactions",
+        },
+        {
+          icon: <History size={20} />,
+          label: "Invoice History",
+          path: "/invoice-history",
         },
       ],
     },
@@ -200,7 +197,7 @@ const Sidebar = ({
           <img
             src={stnLogo}
             alt='Logo'
-            className='h-12 sm:h-14 w-auto object-contain'
+            className='h-12 sm:h-32 w-auto object-contain'
           />
         </div>
 
@@ -245,7 +242,7 @@ const Sidebar = ({
               className='text-gray-400 hover:text-slate-700 shrink-0'
               aria-label='Profile options'
             >
-              <MoreVertical size={16} className='sm:w-4.5 sm:h-4.5' />
+              <MoreVertical size={16} />
             </button>
 
             {isProfileMenuOpen && (
@@ -256,9 +253,7 @@ const Sidebar = ({
                     const user = getSessionUser();
                     await insertAuditTrail([{
                       action: "Logout",
-                      module: "Authentication",
                       performed_by: getPerformedBy(user),
-                      details: `User "${user?.username}" signed out.`,
                     }]);
                     sessionStorage.removeItem("stn_user");
                     setCurrentUser(null);

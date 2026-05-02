@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { ChevronLeft, Tag, Printer, Mail, CheckCircle } from "lucide-react";
+import { insertAuditTrail, getSessionUser, getPerformedBy } from "../../utils/auditTrail";
 
 const CheckoutView = ({
   groupedOrders,
@@ -40,6 +41,15 @@ const CheckoutView = ({
       `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
       "_blank",
     );
+    const sessionUser = getSessionUser();
+    insertAuditTrail([{
+      action: "EMAIL_SUPPLIER",
+      supplier: supplierName,
+      performed_by: getPerformedBy(sessionUser),
+      total_amount: totalAmount,
+      item_name: items.map((i) => i.name).join(", "),
+      quantity: items.reduce((s, i) => s + i.quantity, 0),
+    }]);
   };
 
   return (

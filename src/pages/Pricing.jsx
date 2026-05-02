@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../supabaseClient";
-import { RefreshCcw, Edit3, Save, X, Truck, Tag, Filter, Search } from "lucide-react";
+import { RefreshCcw, Edit3, Save, X, Truck, Tag, Filter, Search, Download, Upload, Mail } from "lucide-react";
 
 const InboundPricing = () => {
   const [pricingData, setPricingData] = useState([]);
@@ -17,6 +17,12 @@ const InboundPricing = () => {
 
   useEffect(() => {
     fetchPricing();
+    const channel = supabase
+      .channel("pricing-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_pricing" }, fetchPricing)
+      .on("postgres_changes", { event: "*", schema: "public", table: "hardware_inventory" }, fetchPricing)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const fetchPricing = async () => {
@@ -72,6 +78,148 @@ const InboundPricing = () => {
       await fetchPricing();
     } catch (err) {
       alert("Update failed: " + err.message);
+    }
+  };
+
+  const [isUploading, setIsUploading] = useState(false);
+  const csvInputRef = useRef(null);
+
+  const handleDownloadSupplierTemplate = (supplier) => {
+    // Filter items for this supplier
+    const supplierItems = pricingData.filter(
+      (item) => item.hardware_inventory?.supplier === supplier
+    );
+    
+    if (supplierItems.length === 0) {
+      alert(`No items found for supplier: ${supplier}`);
+      return;
+    }
+
+    const headers = ["Item Name", "SKU", "Supplier Cost"];
+    const rows = supplierItems.map((item) => [
+      `"${(item.hardware_inventory?.name || "").replace(/"/g, '""')}"`,
+      `"${(item.hardware_inventory?.sku || "").replace(/"/g, '""')}"`,
+      "", // Blank for supplier to fill out
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pricing_template_${supplier.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleEmailSupplier = async (supplier) => {
+    const supplierItems = pricingData.filter(
+      (item) => item.hardware_inventory?.supplier === supplier
+    );
+    
+    if (supplierItems.length === 0) {
+      alert(`No items found for supplier: ${supplier}`);
+      return;
+    }
+
+    // Download the template first
+    handleDownloadSupplierTemplate(supplier);
+
+    // Fetch supplier email
+    let supplierEmail = "";
+    try {
+      const { data: supplierData } = await supabase
+        .from("suppliers")
+        .select("email")
+        .eq("name", supplier)
+        .maybeSingle();
+      supplierEmail = supplierData?.email || "";
+    } catch (err) {
+      console.error("Error fetching supplier email:", err);
+    }
+
+    // Generate email
+    const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const itemList = supplierItems
+      .map(
+        (item, idx) =>
+          `  ${idx + 1}. ${item.hardware_inventory?.name}\n` +
+          `     SKU: ${item.hardware_inventory?.sku || "N/A"}`
+      )
+      .join("\n");
+
+    const subject = encodeURIComponent(`Request for Updated Pricing — STN Procurement — ${today}`);
+    const body = encodeURIComponent(
+      `Dear ${supplier} Sales Team,\n\n` +
+      `We hope this message finds you well.\n\n` +
+      `We are writing to request updated supplier pricing for the following items that we currently source from your company. ` +
+      `Please fill out the CSV template attached to this email with the updated supplier costs and reply with the completed file.\n\n` +
+      `Items for Pricing Update:\n\n` +
+      itemList +
+      `\n\nPlease ensure all prices are accurate and complete. We value our partnership with you and look forward to your prompt response.\n\n` +
+      `Thank you very much.\n\n` +
+      `Warm regards,\n` +
+      `STN Procurement Team\n` +
+      `Date: ${today}`
+    );
+
+    const recipientEmail = supplierEmail ? `&to=${encodeURIComponent(supplierEmail)}` : "";
+    window.open(
+      `https://mail.google.com/mail/?view=cm&fs=1${recipientEmail}&su=${subject}&body=${body}`,
+      "_blank"
+    );
+  };
+
+  const handleUploadCSV = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const text = await file.text();
+      const lines = text.trim().split("\n");
+      if (lines.length < 2) throw new Error("CSV has no data rows.");
+      const headerRow = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, "").toLowerCase());
+      const col = {
+        sku: headerRow.findIndex((h) => h === "sku"),
+        supplier_cost: headerRow.findIndex((h) => h.includes("supplier cost")),
+        margin: headerRow.findIndex((h) => h.includes("margin")),
+        suggested_srp: headerRow.findIndex((h) => h.includes("suggested")),
+        retail_price: headerRow.findIndex((h) => h.includes("retail")),
+      };
+      if (col.sku === -1) throw new Error("Could not find 'SKU' column in CSV.");
+      const updates = [];
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+        const sku = cols[col.sku];
+        if (!sku) continue;
+        const match = pricingData.find((p) => p.hardware_inventory?.sku?.toLowerCase() === sku.toLowerCase());
+        if (!match) continue;
+        updates.push({
+          id: match.id,
+          supplier_cost: col.supplier_cost !== -1 ? Math.max(0, parseFloat(cols[col.supplier_cost]) || 0) : null,
+          margin_percent: col.margin !== -1 ? Math.max(0, parseFloat(cols[col.margin]) || 0) : null,
+          suggested_srp: col.suggested_srp !== -1 ? Math.max(0, parseFloat(cols[col.suggested_srp]) || 0) : null,
+          manual_retail_price: col.retail_price !== -1 ? Math.max(0, parseFloat(cols[col.retail_price]) || 0) : null,
+        });
+      }
+      if (updates.length === 0) throw new Error("No matching SKUs found. Ensure SKU column matches items in the system.");
+      let success = 0;
+      for (const u of updates) {
+        const payload = { updated_at: new Date() };
+        if (u.supplier_cost !== null) payload.supplier_cost = u.supplier_cost.toFixed(2);
+        if (u.margin_percent !== null) payload.margin_percent = u.margin_percent.toFixed(2);
+        if (u.suggested_srp !== null) payload.suggested_srp = u.suggested_srp.toFixed(2);
+        if (u.manual_retail_price !== null) payload.manual_retail_price = u.manual_retail_price.toFixed(2);
+        const { error } = await supabase.from("product_pricing").update(payload).eq("id", u.id);
+        if (!error) success++;
+      }
+      alert(`Updated ${success} of ${updates.length} matching items.`);
+      fetchPricing();
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      setIsUploading(false);
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -159,6 +307,34 @@ const InboundPricing = () => {
         <span className='text-xs font-bold text-slate-500 uppercase whitespace-nowrap'>
           {filteredPricing.length} item{filteredPricing.length !== 1 ? 's' : ''}
         </span>
+
+        {/* CSV Actions */}
+        <div className='flex gap-2 flex-wrap'>
+          <button
+            onClick={() => csvInputRef.current?.click()}
+            disabled={isUploading}
+            className='flex items-center gap-1.5 px-3 py-2.5 rounded-lg border-2 border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:border-emerald-500 hover:text-emerald-600 transition-all whitespace-nowrap disabled:opacity-50'
+          >
+            <Upload size={14} /> {isUploading ? "Uploading..." : "Upload CSV"}
+          </button>
+          {selectedSupplier !== "All Suppliers" && (
+            <>
+              <button
+                onClick={() => handleDownloadSupplierTemplate(selectedSupplier)}
+                className='bg-blue-500 text-white px-4 py-2.5 rounded-lg text-xs font-black flex items-center gap-2 hover:bg-blue-600 transition-all whitespace-nowrap'
+              >
+                <Download size={14} /> Supplier Template
+              </button>
+              <button
+                onClick={() => handleEmailSupplier(selectedSupplier)}
+                className='bg-purple-500 text-white px-4 py-2.5 rounded-lg text-xs font-black flex items-center gap-2 hover:bg-purple-600 transition-all whitespace-nowrap'
+              >
+                <Mail size={14} /> Email Supplier
+              </button>
+            </>
+          )}
+          <input ref={csvInputRef} type='file' accept='.csv' className='hidden' onChange={handleUploadCSV} />
+        </div>
       </div>
 
       <div className='bg-white rounded-2xl sm:rounded-3xl shadow-sm overflow-x-auto'>

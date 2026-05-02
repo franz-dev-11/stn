@@ -11,9 +11,7 @@ const PendingApproval = ({ setCurrentUser }) => {
     const user = getSessionUser();
     await insertAuditTrail([{
       action: "Logout",
-      module: "Authentication",
       performed_by: getPerformedBy(user),
-      details: `User "${user?.username}" signed out from pending approval screen.`,
     }]);
     sessionStorage.removeItem("stn_user");
     if (setCurrentUser) setCurrentUser(null);

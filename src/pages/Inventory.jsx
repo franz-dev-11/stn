@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -13,7 +14,8 @@ import {
   QrCode,
 } from "lucide-react";
 
-const Inventory = ({ setCurrentPage, setSelectedPO }) => {
+const Inventory = () => {
+  const navigate = useNavigate();
   const _sessionUser = (() => { try { return JSON.parse(sessionStorage.getItem("stn_user") || "null"); } catch { return null; } })();
   const _userRole = _sessionUser?.role === "Staff" ? "Cashier" : _sessionUser?.role;
 
@@ -50,7 +52,13 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
       () => setCurrentTime(new Date().toLocaleTimeString()),
       1000,
     );
-    return () => clearInterval(timer);
+    const channel = supabase
+      .channel("inventory-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hardware_inventory" }, fetchInventory)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_batches" }, fetchInventory)
+      .on("postgres_changes", { event: "*", schema: "public", table: "daily_ledger_history" }, fetchInventory)
+      .subscribe();
+    return () => { clearInterval(timer); supabase.removeChannel(channel); };
   }, []);
 
   const extractPO = (batchNumber) => {
@@ -573,7 +581,11 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                       itemBatches.map((batch) => (
                         <tr
                           key={batch.id}
-                          className='text-xs hover:bg-teal-50/50 transition-colors'
+                          onClick={() => {
+                            const po = extractPO(batch.batch_number);
+                            navigate("/purchase-history", { state: { orderNumber: po } });
+                          }}
+                          className='text-xs hover:bg-teal-50/50 transition-colors cursor-pointer'
                         >
                           <td className='px-8 py-6 text-center'>
                             <div
@@ -584,7 +596,7 @@ const Inventory = ({ setCurrentPage, setSelectedPO }) => {
                               }`}
                             ></div>
                           </td>
-                          <td className='px-8 py-6 font-mono font-black text-slate-800 text-base'>
+                          <td className='px-8 py-6 font-mono font-black text-slate-800 text-base cursor-pointer hover:text-teal-600'>
                             {batch.batch_number?.split("-").slice(0, 2).join("-")}
                           </td>
                           <td className='px-8 py-6 text-center font-bold text-slate-700 text-sm'>

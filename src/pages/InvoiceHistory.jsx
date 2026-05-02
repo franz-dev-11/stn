@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import {
   Printer,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 
 const InvoiceHistory = () => {
+  const location = useLocation();
   const [invoices, setInvoices] = useState([]);
   const [expandedInvoice, setExpandedInvoice] = useState(null);
   const [vipData, setVipData] = useState({}); // { [inv.id]: { order, payments } }
@@ -27,27 +29,27 @@ const InvoiceHistory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      try {
-        // Fetch from sales_transactions and join with sales_items
-        const { data, error } = await supabase
-          .from("sales_transactions")
-          .select(
-            `
-            *,
-            sales_items (*)
-          `,
-          )
-          .order("created_at", { ascending: false });
+  const fetchInvoices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("sales_transactions")
+        .select(`*, sales_items (*)`)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setInvoices(data || []);
+    } catch (err) {
+      console.error("Error fetching invoices:", err.message);
+    }
+  };
 
-        if (error) throw error;
-        setInvoices(data || []);
-      } catch (err) {
-        console.error("Error fetching invoices:", err.message);
-      }
-    };
+  useEffect(() => {
     fetchInvoices();
+    const channel = supabase
+      .channel("invoice-history-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_transactions" }, fetchInvoices)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_items" }, fetchInvoices)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   // Filtering Logic
@@ -70,6 +72,17 @@ const InvoiceHistory = () => {
     currentPage * itemsPerPage,
   );
   const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+
+  const [autoExpandSO, setAutoExpandSO] = useState(() => location.state?.soNumber || null);
+  useEffect(() => {
+    if (!autoExpandSO || invoices.length === 0) return;
+    const idx = filteredInvoices.findIndex((inv) => inv.so_number === autoExpandSO);
+    if (idx !== -1) {
+      setCurrentPage(Math.floor(idx / itemsPerPage) + 1);
+      setExpandedInvoice(filteredInvoices[idx].id);
+      setAutoExpandSO(null);
+    }
+  }, [autoExpandSO, invoices, filteredInvoices, itemsPerPage]);
 
   const toggleExpand = async (inv) => {
     const isOpen = expandedInvoice === inv.id;
@@ -339,17 +352,30 @@ const InvoiceHistory = () => {
                                       ))}
                                     </tbody>
                                     <tfoot>
-                                      <tr className='border-t-2 border-slate-200'>
-                                        <td
-                                          colSpan='3'
-                                          className='py-6 text-right text-sm font-black uppercase text-slate-600'
-                                        >
-                                          Grand Total:
-                                        </td>
-                                        <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>
-                                          ₱{inv.total_amount?.toLocaleString()}
-                                        </td>
-                                      </tr>
+                                      {(() => {
+                                        const itemsSubtotal = (inv.sales_items || []).reduce((s, it) => s + (it.unit_price * it.quantity), 0);
+                                        const discount = Math.round((itemsSubtotal - Number(inv.total_amount)) * 100) / 100;
+                                        return (
+                                          <>
+                                            {discount > 0 && (
+                                              <>
+                                                <tr className='border-t border-slate-200'>
+                                                  <td colSpan='3' className='py-1 text-right text-xs font-bold uppercase text-slate-400'>Items Subtotal:</td>
+                                                  <td className='py-1 text-right text-sm font-bold text-slate-500'>₱{itemsSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                </tr>
+                                                <tr>
+                                                  <td colSpan='3' className='py-1 text-right text-xs font-black uppercase text-rose-500'>Discount:</td>
+                                                  <td className='py-1 text-right text-sm font-black text-rose-500'>-₱{discount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                </tr>
+                                              </>
+                                            )}
+                                            <tr className='border-t-2 border-slate-200'>
+                                              <td colSpan='3' className='py-6 text-right text-sm font-black uppercase text-slate-600'>Grand Total:</td>
+                                              <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>₱{inv.total_amount?.toLocaleString()}</td>
+                                            </tr>
+                                          </>
+                                        );
+                                      })()}
                                     </tfoot>
                                   </table>
 

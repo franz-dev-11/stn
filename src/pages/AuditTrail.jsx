@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Filter,
   ClipboardList,
+  UserPlus,
+  Mail,
 } from "lucide-react";
 
 const ACTION_META = {
@@ -50,6 +52,21 @@ const ACTION_META = {
     icon: <Banknote size={12} />,
     color: "bg-amber-100 text-amber-700",
   },
+  RETURNED: {
+    label: "Returned",
+    icon: <RotateCcw size={12} />,
+    color: "bg-green-100 text-green-700",
+  },
+  BATCH_ACCOUNT: {
+    label: "Batch Account Creation",
+    icon: <UserPlus size={12} />,
+    color: "bg-purple-100 text-purple-700",
+  },
+  EMAIL_SUPPLIER: {
+    label: "Email Supplier",
+    icon: <Mail size={12} />,
+    color: "bg-sky-100 text-sky-700",
+  },
 };
 
 const ITEMS_PER_PAGE = 20;
@@ -64,18 +81,25 @@ const AuditTrail = () => {
   const [endDate, setEndDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
+  const fetchRecords = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("audit_trail")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) console.error("Audit trail fetch error:", error.message);
+    setRecords(data || []);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchRecords = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("audit_trail")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) console.error("Audit trail fetch error:", error.message);
-      setRecords(data || []);
-      setLoading(false);
-    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRecords();
+    const channel = supabase
+      .channel("audit-trail-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "audit_trail" }, fetchRecords)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const userOptions = useMemo(() => {
@@ -182,6 +206,9 @@ const AuditTrail = () => {
             <option value="RETURN">Return</option>
             <option value="REPLACED">Replaced</option>
             <option value="REFUNDED">Refunded</option>
+            <option value="RETURNED">Returned</option>
+            <option value="BATCH_ACCOUNT">Batch Account Creation</option>
+            <option value="EMAIL_SUPPLIER">Email Supplier</option>
           </select>
         </div>
         <div className="flex items-center gap-2 shrink-0">

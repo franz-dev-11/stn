@@ -40,6 +40,12 @@ const RecordSales = () => {
 
   useEffect(() => {
     fetchInventory();
+    const channel = supabase
+      .channel("pos-inventory-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hardware_inventory" }, fetchInventory)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_batches" }, fetchInventory)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const fetchInventory = async () => {
@@ -174,7 +180,7 @@ const RecordSales = () => {
           {
             so_number: soNum,
             customer_name: customerName,            transaction_type: transactionType,            total_amount: totalAmount,
-            status: "Pending",
+            status: transactionType === "walk-in" ? "Completed" : "Pending",
           },
         ])
         .select()
@@ -654,7 +660,7 @@ const InvoiceView = ({ order, onBack }) => (
               <tr key={idx} className='border-b border-slate-100'>
                 <td className='py-4 px-2 text-sm font-black uppercase'>{i.name}</td>
                 <td className='py-4 px-2 text-[10px] font-mono font-bold text-teal-600'>
-                  {i.activeBatch.batch_number?.split('-').slice(0, 2).join('-')}
+                  {i.activeBatch.batch_number?.split('-').pop() || '—'}
                 </td>
                 <td className='py-4 px-2 text-center font-black'>{i.quantity}</td>
                 <td className='py-4 px-2 text-right text-sm font-bold'>

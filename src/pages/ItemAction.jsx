@@ -46,13 +46,8 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
   useEffect(() => {
     const fetchData = async () => {
       if (!batchRef) {
-        console.log("No batchRef provided");
         return;
       }
-
-      console.log("batchRef:", batchRef);
-      console.log("orderNumber:", orderNumber);
-      console.log("productId:", productId);
 
       let itemsRes;
       try {
@@ -65,8 +60,6 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
         if (productId) {
           itemsRequest = itemsRequest.eq("product_id", productId);
         }
-
-        console.log("Querying order_scheduling with po_number:", orderNumber, "product_id:", productId);
 
         // 2. Try to get receipt date from inventory_batches
         const batchRequest = supabase
@@ -91,14 +84,9 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
         let batchRes, productRes;
         [itemsRes, batchRes, productRes] = await Promise.all(promises);
 
-        console.log("productRes:", productRes);
-
         if (productRes?.data?.name) {
           setProductName(productRes.data.name);
         }
-
-        console.log("itemsRes:", itemsRes);
-        console.log("batchRes:", batchRes);
 
         if (itemsRes.error) throw itemsRes.error;
 

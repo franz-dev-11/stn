@@ -23,19 +23,24 @@ const ReturnRecords = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
-  useEffect(() => {
-    const fetchRecords = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("return_records")
-        .select("*")
-        .order("returned_at", { ascending: false });
+  const fetchRecords = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("return_records")
+      .select("*")
+      .order("returned_at", { ascending: false });
+    if (error) console.error("Error fetching return records:", error.message);
+    setRecords(data || []);
+    setLoading(false);
+  };
 
-      if (error) console.error("Error fetching return records:", error.message);
-      setRecords(data || []);
-      setLoading(false);
-    };
+  useEffect(() => {
     fetchRecords();
+    const channel = supabase
+      .channel("return-records-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "return_records" }, fetchRecords)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const handleResolution = async (record, status) => {
@@ -78,7 +83,27 @@ const ReturnRecords = () => {
         }
       }
 
-      if (status === "refunded") {
+      if (status === "returned") {
+        // Deduct outbound_qty from hardware_inventory (returned items reduce net outbound)
+        const { data: inv, error: invFetchErr } = await supabase
+          .from("hardware_inventory")
+          .select("id, outbound_qty, stock_balance")
+          .eq("id", record.product_id)
+          .maybeSingle();
+
+        if (invFetchErr) throw new Error(invFetchErr.message);
+
+        if (inv) {
+          const { error: invUpdateErr } = await supabase
+            .from("hardware_inventory")
+            .update({
+              outbound_qty: Math.max(0, Number(inv.outbound_qty || 0) - record.return_qty),
+              stock_balance: Number(inv.stock_balance || 0) + record.return_qty,
+            })
+            .eq("id", inv.id);
+          if (invUpdateErr) throw new Error(invUpdateErr.message);
+        }
+
         // Deduct refund value from the purchase order total
         const refundValue = (record.return_qty || 0) * (record.unit_cost || 0);
         if (refundValue > 0) {
@@ -110,7 +135,7 @@ const ReturnRecords = () => {
 
       const user = getSessionUser();
       await insertAuditTrail([{
-        action: status === "replaced" ? "REPLACED" : "REFUNDED",
+        action: status === "replaced" ? "REPLACED" : "RETURNED",
         reference_number: record.order_number,
         product_id: record.product_id,
         item_name: record.item_name,
@@ -317,16 +342,25 @@ const ReturnRecords = () => {
                       <td className="px-5 py-4 text-center whitespace-nowrap">
                         {r.resolution_status === "replaced" ? (
                           <span className="inline-block bg-blue-100 text-blue-700 font-black text-[10px] px-3 py-1 rounded-full uppercase">Replaced</span>
-                        ) : r.resolution_status === "refunded" ? (
-                          <span className="inline-block bg-green-100 text-green-700 font-black text-[10px] px-3 py-1 rounded-full uppercase">Refunded</span>
+                        ) : r.resolution_status === "returned" || r.resolution_status === "refunded" ? (
+                          <span className="inline-block bg-green-100 text-green-700 font-black text-[10px] px-3 py-1 rounded-full uppercase">Returned</span>
                         ) : (
-                          <button
-                            onClick={() => handleResolution(r, "replaced")}
-                            disabled={updatingId === r.id}
-                            className="px-2 py-1 rounded-lg bg-blue-500 text-white font-black text-[10px] uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors"
-                          >
-                            Replaced
-                          </button>
+                          <div className="flex gap-1 justify-center">
+                            <button
+                              onClick={() => handleResolution(r, "replaced")}
+                              disabled={updatingId === r.id}
+                              className="px-2 py-1 rounded-lg bg-blue-500 text-white font-black text-[10px] uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                            >
+                              Replaced
+                            </button>
+                            <button
+                              onClick={() => handleResolution(r, "returned")}
+                              disabled={updatingId === r.id}
+                              className="px-2 py-1 rounded-lg bg-green-500 text-white font-black text-[10px] uppercase hover:bg-green-600 disabled:opacity-50 transition-colors"
+                            >
+                              Returned
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

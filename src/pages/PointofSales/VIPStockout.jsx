@@ -32,11 +32,19 @@ const VIPStockout = () => {
   const [addingVIP, setAddingVIP] = useState(false);
 
   const [paymentTerms, setPaymentTerms] = useState({ downpayment: 0, installments: 1 });
+  const [globalDiscountPct, setGlobalDiscountPct] = useState(0);
   const [lastOrder, setLastOrder] = useState(null);
 
   useEffect(() => {
     fetchInventory();
     fetchVIPCustomers();
+    const channel = supabase
+      .channel("vip-stockout-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hardware_inventory" }, fetchInventory)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_batches" }, fetchInventory)
+      .on("postgres_changes", { event: "*", schema: "public", table: "vip_customers" }, fetchVIPCustomers)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const fetchInventory = async () => {
@@ -79,6 +87,11 @@ const VIPStockout = () => {
     setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, selectedBatchId: batchId } : item));
   };
 
+  const setItemDiscount = (cartId, pct) => {
+    const val = Math.max(0, Math.min(100, parseFloat(pct) || 0));
+    setCart((prev) => prev.map((c) => c.cartId === cartId ? { ...c, itemDiscountPct: val } : c));
+  };
+
   const addToCart = (item) => {
     const selectedBatch = item.batches.find((b) => b.id === item.selectedBatchId);
     if (!selectedBatch) { alert("Please select an available batch."); return; }
@@ -88,7 +101,7 @@ const VIPStockout = () => {
       if (exists.quantity + 1 > selectedBatch.current_stock) { alert("Not enough stock in this batch."); return; }
       setCart(cart.map((c) => c.cartId === cartId ? { ...c, quantity: c.quantity + 1 } : c));
     } else {
-      setCart([...cart, { ...item, cartId, quantity: 1, activeBatch: selectedBatch }]);
+      setCart([...cart, { ...item, cartId, quantity: 1, activeBatch: selectedBatch, itemDiscountPct: 0 }]);
     }
     setIsCartOpen(true);
   };
@@ -104,7 +117,12 @@ const VIPStockout = () => {
     );
   };
 
-  const grandTotal = cart.reduce((s, i) => s + i.displayPrice * i.quantity, 0);
+  const cartSubtotal = cart.reduce((s, i) => {
+    const eff = i.displayPrice * (1 - (i.itemDiscountPct || 0) / 100);
+    return s + eff * i.quantity;
+  }, 0);
+  const globalDiscountAmt = cartSubtotal * (globalDiscountPct || 0) / 100;
+  const grandTotal = Math.max(0, cartSubtotal - globalDiscountAmt);
   const balance = grandTotal - (paymentTerms.downpayment || 0);
   const installmentAmt = balance / Math.max(1, paymentTerms.installments);
 
@@ -171,16 +189,21 @@ const VIPStockout = () => {
         .single();
       if (orderErr) throw orderErr;
 
-      // 5. Insert VIP order items
-      const vipItemRows = cart.map((item) => ({
-        order_id: orderData.id,
-        product_id: item.id,
-        item_name: item.name,
-        batch_number: item.activeBatch?.batch_number || null,
-        quantity: item.quantity,
-        unit_price: item.displayPrice,
-        subtotal: item.displayPrice * item.quantity,
-      }));
+      // 5. Insert VIP order items (use per-item discounted price)
+      const vipItemRows = cart.map((item) => {
+        const effectivePrice = item.displayPrice * (1 - (item.itemDiscountPct || 0) / 100);
+        return {
+          order_id: orderData.id,
+          product_id: item.id,
+          item_name: item.name,
+          batch_number: item.activeBatch?.batch_number || null,
+          quantity: item.quantity,
+          unit_price: effectivePrice,
+          item_discount_pct: item.itemDiscountPct || 0,
+          original_price: item.displayPrice,
+          subtotal: effectivePrice * item.quantity,
+        };
+      });
       const { error: itemsErr } = await supabase.from("vip_order_items").insert(vipItemRows);
       if (itemsErr) throw itemsErr;
 
@@ -198,18 +221,21 @@ const VIPStockout = () => {
       const user = getSessionUser();
       const performedBy = getPerformedBy(user);
       await insertAuditTrail(
-        cart.map((item) => ({
-          action: "VIP_SALE",
-          reference_number: soNum,
-          product_id: item.id,
-          item_name: item.name,
-          sku: item.sku || null,
-          supplier: item.supplier || null,
-          quantity: item.quantity,
-          unit_cost: item.displayPrice,
-          total_amount: item.quantity * item.displayPrice,
-          performed_by: performedBy,
-        }))
+        cart.map((item) => {
+          const effectivePrice = item.displayPrice * (1 - (item.itemDiscountPct || 0) / 100);
+          return {
+            action: "VIP_SALE",
+            reference_number: soNum,
+            product_id: item.id,
+            item_name: item.name,
+            sku: item.sku || null,
+            supplier: item.supplier || null,
+            quantity: item.quantity,
+            unit_cost: effectivePrice,
+            total_amount: item.quantity * effectivePrice,
+            performed_by: performedBy,
+          };
+        })
       );
 
       setLastOrder({
@@ -217,6 +243,9 @@ const VIPStockout = () => {
         soNum,
         customerName: selectedCustomer.name,
         items: [...cart],
+        cartSubtotal,
+        globalDiscountPct,
+        globalDiscountAmt,
         grandTotal,
         paymentTerms: { ...paymentTerms },
         balance,
@@ -225,6 +254,7 @@ const VIPStockout = () => {
       });
       setCart([]);
       setPaymentTerms({ downpayment: 0, installments: 1 });
+      setGlobalDiscountPct(0);
       setIsCartOpen(false);
       setView("invoice");
     } catch (err) {
@@ -427,7 +457,13 @@ const VIPStockout = () => {
           <div className='bg-white rounded-[2.5rem] p-8 shadow-sm sticky top-8'>
             <h2 className='text-xl font-black uppercase italic mb-6 text-slate-800'>Summary</h2>
             <div className='pt-2'>
-              <p className='text-[10px] font-black uppercase text-slate-400 mb-1'>Estimated Total</p>
+              {cart.length > 0 && globalDiscountPct > 0 && (
+                <div className='mb-4 space-y-1 text-xs font-bold'>
+                  <div className='flex justify-between text-slate-500'><span>Cart Subtotal</span><span>₱{cartSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+                  <div className='flex justify-between text-rose-500'><span>Discount ({globalDiscountPct}%)</span><span>-₱{globalDiscountAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+                </div>
+              )}
+              <p className='text-[10px] font-black uppercase text-slate-400 mb-1'>Grand Total</p>
               <h2 className='text-4xl font-black italic text-teal-600'>₱{grandTotal.toLocaleString()}</h2>
               <button
                 disabled={cart.length === 0}
@@ -452,7 +488,10 @@ const VIPStockout = () => {
             </div>
 
             <div className='flex-1 space-y-4 pr-2'>
-              {cart.map((item) => (
+              {cart.map((item) => {
+                const effPrice = item.displayPrice * (1 - (item.itemDiscountPct || 0) / 100);
+                const itemDiscount = item.displayPrice * item.quantity * ((item.itemDiscountPct || 0) / 100);
+                return (
                 <div key={item.cartId} className='bg-white border-2 border-slate-50 p-5 rounded-3xl'>
                   <div className='flex justify-between mb-2'>
                     <p className='font-black text-sm uppercase leading-tight w-2/3'>{item.name}</p>
@@ -469,16 +508,46 @@ const VIPStockout = () => {
                       />
                       <button onClick={() => updateCartQty(item.cartId, 1, item.activeBatch.current_stock)}><Plus size={14} /></button>
                     </div>
-                    <p className='font-black text-slate-900'>₱{(item.displayPrice * item.quantity).toLocaleString()}</p>
+                    <div className='text-right'>
+                      {(item.itemDiscountPct || 0) > 0 && (
+                        <p className='text-[9px] line-through text-slate-400'>₱{(item.displayPrice * item.quantity).toLocaleString()}</p>
+                      )}
+                      <p className='font-black text-slate-900'>₱{(effPrice * item.quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                    </div>
+                  </div>
+                  {/* Per-item discount */}
+                  <div className='flex items-center gap-2 mt-2 pt-2 border-t border-slate-50'>
+                    <span className='text-[9px] font-black text-slate-400 uppercase'>Item Disc:</span>
+                    <div className='flex items-center border border-slate-200 rounded-lg px-1.5 py-0.5 gap-0.5'>
+                      <input
+                        type='number' min='0' max='100' step='0.1'
+                        value={item.itemDiscountPct || 0}
+                        onChange={(e) => setItemDiscount(item.cartId, e.target.value)}
+                        className='w-10 text-xs font-black text-center outline-none'
+                      />
+                      <span className='text-[10px] font-black text-slate-400'>%</span>
+                    </div>
+                    {(item.itemDiscountPct || 0) > 0 && (
+                      <span className='text-[9px] font-bold text-rose-500'>-₱{itemDiscount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                    )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Payment Terms */}
             <div className='mt-8 pt-6 border-t-2 border-slate-100'>
               <h3 className='text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4'>Payment Terms</h3>
               <div className='flex flex-col gap-3 mb-4'>
+                <div>
+                  <label className='text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1'>Grand Total Discount (%)</label>
+                  <input
+                    type='number' min='0' max='100' step='0.1' value={globalDiscountPct}
+                    onChange={(e) => setGlobalDiscountPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                    className='w-full border-2 border-rose-100 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:border-rose-400 transition-all'
+                  />
+                </div>
                 <div>
                   <label className='text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1'>Downpayment (₱)</label>
                   <input
@@ -497,9 +566,13 @@ const VIPStockout = () => {
                 </div>
               </div>
               <div className='bg-teal-50 rounded-2xl p-4 text-xs font-bold text-teal-700 mb-6 space-y-1'>
-                <div className='flex justify-between'><span>Grand Total</span><span>₱{grandTotal.toLocaleString()}</span></div>
+                <div className='flex justify-between'><span>Cart Subtotal</span><span>₱{cartSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+                {globalDiscountPct > 0 && (
+                  <div className='flex justify-between text-rose-600'><span>Discount ({globalDiscountPct}%)</span><span>-₱{globalDiscountAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+                )}
+                <div className='flex justify-between font-black text-teal-900 border-t border-teal-100 pt-1'><span>Grand Total</span><span>₱{grandTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
                 <div className='flex justify-between'><span>Downpayment</span><span>₱{Number(paymentTerms.downpayment).toLocaleString()}</span></div>
-                <div className='flex justify-between font-black text-teal-900'><span>Balance</span><span>₱{balance.toLocaleString()}</span></div>
+                <div className='flex justify-between font-black text-teal-900'><span>Balance</span><span>₱{balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
                 <div className='flex justify-between'><span>Per Installment ({paymentTerms.installments}x)</span><span>₱{installmentAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
               </div>
             </div>
@@ -588,21 +661,61 @@ const VIPInvoiceView = ({ order, onBack }) => {
               </tr>
             </thead>
             <tbody>
-              {order.items.map((i, idx) => (
+              {order.items.map((i, idx) => {
+                const effPrice = i.displayPrice * (1 - (i.itemDiscountPct || 0) / 100);
+                return (
                 <tr key={idx} className='border-b border-slate-100'>
                   <td className='py-4 px-2 text-sm font-black uppercase'>{i.name}</td>
-                  <td className='py-4 px-2 text-[10px] font-mono font-bold text-teal-600'>{i.activeBatch?.batch_number?.split("-").slice(0, 2).join("-")}</td>
+                  <td className='py-4 px-2 text-[10px] font-mono font-bold text-teal-600'>{i.activeBatch?.batch_number?.split("-").pop() || '—'}</td>
                   <td className='py-4 px-2 text-center font-black'>{i.quantity}</td>
-                  <td className='py-4 px-2 text-right text-sm font-bold'>₱{i.displayPrice?.toLocaleString()}</td>
-                  <td className='py-4 px-2 text-right text-sm font-black'>₱{(i.displayPrice * i.quantity).toLocaleString()}</td>
+                  <td className='py-4 px-2 text-right text-sm font-bold'>
+                    {(i.itemDiscountPct || 0) > 0 ? (
+                      <>
+                        <span className='line-through text-slate-400 text-xs block'>₱{i.displayPrice?.toLocaleString()}</span>
+                        <span>₱{effPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span className='text-[9px] text-rose-500 font-bold block'>{i.itemDiscountPct}% off</span>
+                      </>
+                    ) : `₱${i.displayPrice?.toLocaleString()}`}
+                  </td>
+                  <td className='py-4 px-2 text-right text-sm font-black'>₱{(effPrice * i.quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
             <tfoot>
-              <tr className='border-t-2 border-slate-200'>
-                <td colSpan='4' className='py-6 text-right text-sm font-black uppercase text-slate-600'>Grand Total:</td>
-                <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>₱{order.grandTotal.toLocaleString()}</td>
-              </tr>
+              {(() => {
+                // Calculate total per-item discounts
+                const totalItemDiscounts = order.items.reduce((sum, i) => {
+                  const discountAmt = (i.displayPrice * i.quantity * ((i.itemDiscountPct || 0) / 100));
+                  return sum + discountAmt;
+                }, 0);
+                return (
+                  <>
+                    {totalItemDiscounts > 0 && (
+                      <tr>
+                        <td colSpan='4' className='py-1 text-right text-[10px] font-black uppercase text-rose-500'>Item Discounts:</td>
+                        <td className='py-1 text-right text-sm font-black text-rose-500'>-₱{totalItemDiscounts.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    )}
+                    {order.globalDiscountPct > 0 && (
+                      <>
+                        <tr>
+                          <td colSpan='4' className='py-1 text-right text-xs font-bold uppercase text-slate-400'>Cart Subtotal:</td>
+                          <td className='py-1 text-right text-sm font-bold text-slate-500'>₱{order.cartSubtotal?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan='4' className='py-1 text-right text-xs font-black uppercase text-rose-500'>Discount ({order.globalDiscountPct}%):</td>
+                          <td className='py-1 text-right text-sm font-black text-rose-500'>-₱{order.globalDiscountAmt?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                        </tr>
+                      </>
+                    )}
+                    <tr className='border-t-2 border-slate-200'>
+                      <td colSpan='4' className='py-6 text-right text-sm font-black uppercase text-slate-600'>Grand Total:</td>
+                      <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>₱{order.grandTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    </tr>
+                  </>
+                );
+              })()}
             </tfoot>
           </table>
           {/* VIP Payment Terms Panel */}

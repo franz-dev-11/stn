@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 import {
   Printer,
   ChevronDown,
@@ -18,6 +20,7 @@ import {
 } from "lucide-react";
 
 const PurchaseHistory = () => {
+  const location = useLocation();
   const [batches, setBatches] = useState([]);
   const [suppliers, setSuppliers] = useState([]); // Added to fetch vendor details
   const [expandedBatch, setExpandedBatch] = useState(null);
@@ -58,17 +61,21 @@ const PurchaseHistory = () => {
     setSuppliers(supData || []);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchReturns = async () => {
     const { data, error } = await supabase.from("return_records").select("*");
     if (!error) setReturnRecords(data || []);
   };
 
   useEffect(() => {
+    fetchData();
     fetchReturns();
+    const channel = supabase
+      .channel("purchase-history-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_scheduling" }, fetchData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders" }, fetchData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "return_records" }, fetchReturns)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   // Filtering & Pagination Logic
@@ -115,7 +122,7 @@ const PurchaseHistory = () => {
       let refundTotal = 0;
       receipt.items.forEach((item) => {
         if (!item.product_id) return;
-        const refunds = returnRecords.filter(r => r.order_number === receipt.order_number && r.product_id === item.product_id && r.resolution_status === "refunded");
+        const refunds = returnRecords.filter(r => r.order_number === receipt.order_number && r.product_id === item.product_id && (r.resolution_status === "refunded" || r.resolution_status === "returned"));
         refundTotal += refunds.reduce((sum, r) => sum + ((r.return_qty || 0) * (r.unit_cost || 0)), 0);
       });
       receipt.totalAmount -= refundTotal;
@@ -129,6 +136,18 @@ const PurchaseHistory = () => {
     currentPage * itemsPerPage,
   );
   const totalPages = Math.ceil(groupedReceipts.length / itemsPerPage);
+
+  // Auto-expand a specific PO when navigated from InboundScheduling calendar
+  const [autoExpandPN, setAutoExpandPN] = useState(() => location.state?.orderNumber || null);
+  useEffect(() => {
+    if (!autoExpandPN || groupedReceipts.length === 0) return;
+    const idx = groupedReceipts.findIndex((r) => r.order_number === autoExpandPN);
+    if (idx !== -1) {
+      setCurrentPage(Math.floor(idx / itemsPerPage) + 1);
+      setExpandedBatch(autoExpandPN);
+      setAutoExpandPN(null);
+    }
+  }, [autoExpandPN, groupedReceipts]);
 
   const handleMarkReceived = async (e, receipt) => {
     e.stopPropagation();
@@ -148,7 +167,19 @@ const PurchaseHistory = () => {
       // Update inventory for each item in the PO
       for (const item of receipt.items) {
         const productId = item.product_id;
-        const qty = Number(item.quantity) || 0;
+        const orderNumber = receipt.order_number;
+        let qty = Number(item.quantity) || 0;
+
+        // Check if any items have been returned for this order/product
+        const { data: returns } = await supabase
+          .from("return_records")
+          .select("return_qty")
+          .eq("order_number", orderNumber)
+          .eq("product_id", productId);
+
+        const totalReturned = returns?.reduce((sum, r) => sum + (r.return_qty || 0), 0) || 0;
+        const netQty = Math.max(0, qty - totalReturned);
+
         // Fetch inventory
         const { data: inv, error: invFetchErr } = await supabase
           .from("hardware_inventory")
@@ -157,16 +188,33 @@ const PurchaseHistory = () => {
           .maybeSingle();
         if (invFetchErr) throw new Error(invFetchErr.message);
         if (inv) {
+          const updatedInboundQty = netQty;
+          const updatedStockBalance = Number(inv.stock_balance || 0) + netQty;
+
           await supabase
             .from("hardware_inventory")
             .update({
-              inbound_qty: Number(inv.inbound_qty || 0) + qty,
-              stock_balance: Number(inv.stock_balance || 0) + qty,
+              inbound_qty: updatedInboundQty,
+              stock_balance: updatedStockBalance,
             })
             .eq("id", productId);
+
+          // Record to daily_ledger_history
+          const today = new Date().toISOString().split("T")[0];
+          await supabase.from("daily_ledger_history").insert([{
+            product_id: productId,
+            item_name: item.hardware_inventory?.name || null,
+            sku: item.hardware_inventory?.sku || null,
+            category: item.hardware_inventory?.category || null,
+            unit_cost: item.unit_cost || 0,
+            inbound_qty: updatedInboundQty,
+            outbound_qty: totalReturned,
+            final_balance: updatedStockBalance,
+            snapshot_date: today,
+          }]);
         }
         // Update inventory_batches: only insert if not already created by InboundScheduling
-        const batchNumber = `${receipt.order_number}-${productId}`;
+        const batchNumber = `${orderNumber}-${productId}`;
         const { data: batch } = await supabase
           .from("inventory_batches")
           .select("id, current_stock")
@@ -179,7 +227,7 @@ const PurchaseHistory = () => {
             .insert([{
               product_id: productId,
               batch_number: batchNumber,
-              current_stock: qty,
+              current_stock: netQty,
               batch_date: new Date().toISOString(),
             }]);
         }
@@ -237,12 +285,8 @@ const PurchaseHistory = () => {
     )
       return;
 
-    const sessionUser = (() => {
-      try { return JSON.parse(sessionStorage.getItem("stn_user") || "null"); } catch { return null; }
-    })();
-    const returnedBy = sessionUser
-      ? `${sessionUser.first_name || ""} ${sessionUser.last_name || ""}`.trim() || sessionUser.username
-      : "Unknown";
+    const user = getSessionUser();
+    const returnedBy = getPerformedBy(user);
 
     setReturnSaving((prev) => ({ ...prev, [receipt.id]: true }));
     try {
@@ -259,11 +303,14 @@ const PurchaseHistory = () => {
 
         if (invFetchErr) throw new Error(`Inventory fetch error: ${invFetchErr.message}`);
 
+        const updatedInboundQty = Math.max(0, Number(inv.inbound_qty || 0) - returnQty);
+        const updatedStockBalance = Math.max(0, Number(inv.stock_balance || 0) - returnQty);
+
         const { error: invUpdateErr } = await supabase
           .from("hardware_inventory")
           .update({
-            stock_balance: Math.max(0, Number(inv.stock_balance || 0) - returnQty),
-            inbound_qty: Math.max(0, Number(inv.inbound_qty || 0) - returnQty),
+            stock_balance: updatedStockBalance,
+            inbound_qty: updatedInboundQty,
           })
           .eq("id", productId);
 
@@ -312,9 +359,57 @@ const PurchaseHistory = () => {
           return_qty: returnQty,
           unit_cost: item.unit_cost || null,
           returned_by: returnedBy,
-          resolution_status: "refunded",
+          resolution_status: "returned",
         }]);
         if (returnErr) throw new Error(`Audit insert error: ${returnErr.message}`);
+
+        // 5. Update daily_ledger_history record for today with corrected inbound_qty
+        const today = new Date().toISOString().split("T")[0];
+        const { data: existingLedger } = await supabase
+          .from("daily_ledger_history")
+          .select("id, inbound_qty, outbound_qty")
+          .eq("product_id", productId)
+          .eq("snapshot_date", today)
+          .maybeSingle();
+
+        if (existingLedger) {
+          // Update existing entry: set inbound_qty to the new value after return
+          await supabase
+            .from("daily_ledger_history")
+            .update({
+              inbound_qty: updatedInboundQty,
+              outbound_qty: (existingLedger.outbound_qty || 0) + returnQty,
+              final_balance: updatedStockBalance,
+            })
+            .eq("id", existingLedger.id);
+        } else {
+          // No entry for today yet, create new one
+          await supabase.from("daily_ledger_history").insert([{
+            product_id: productId,
+            item_name: item.hardware_inventory?.name || null,
+            sku: item.hardware_inventory?.sku || null,
+            category: item.hardware_inventory?.category || null,
+            unit_cost: item.unit_cost || 0,
+            inbound_qty: updatedInboundQty,
+            outbound_qty: returnQty,
+            final_balance: updatedStockBalance,
+            snapshot_date: today,
+          }]);
+        }
+
+        // 6. Log to audit trail
+        await insertAuditTrail([{
+          action: "RETURNED",
+          reference_number: orderNumber,
+          product_id: productId,
+          item_name: item.hardware_inventory?.name || null,
+          sku: item.hardware_inventory?.sku || null,
+          supplier: receipt.supplier || null,
+          quantity: returnQty,
+          unit_cost: item.unit_cost || 0,
+          total_amount: returnQty * (item.unit_cost || 0),
+          performed_by: returnedBy,
+        }]);
       }
 
       setReturnMode((prev) => ({ ...prev, [receipt.id]: false }));
@@ -650,7 +745,7 @@ const PurchaseHistory = () => {
                                     <tbody>
                                       {receipt.items.map((item, idx) => {
                                         const returns = returnRecords.filter(r => r.order_number === receipt.order_number && r.product_id === item.product_id);
-                                        const refundedQty = returns.filter(r => r.resolution_status === "refunded").reduce((s, r) => s + (r.return_qty || 0), 0);
+                                        const refundedQty = returns.filter(r => r.resolution_status === "refunded" || r.resolution_status === "returned").reduce((s, r) => s + (r.return_qty || 0), 0);
                                         const netQty = Math.max(0, item.quantity - refundedQty);
                                         const colCount = returnMode[receipt.id] ? 7 : 6;
                                         return (
@@ -700,7 +795,7 @@ const PurchaseHistory = () => {
                                                 {refundedQty > 0 ? (
                                                   <>
                                                     ₱{(item.unit_cost * netQty).toLocaleString()}
-                                                    <span className='block text-[9px] text-rose-500 font-bold'>-₱{(item.unit_cost * refundedQty).toLocaleString()} refunded</span>
+                                                    <span className='block text-[9px] text-rose-500 font-bold'>-₱{(item.unit_cost * refundedQty).toLocaleString()} deducted</span>
                                                   </>
                                                 ) : `₱${(item.unit_cost * item.quantity).toLocaleString()}`}
                                               </td>
@@ -716,13 +811,13 @@ const PurchaseHistory = () => {
                                                         <span>Qty: {r.return_qty}</span>
                                                         <span>by {r.returned_by || '—'}</span>
                                                         <span className={`px-1.5 py-0.5 rounded uppercase ${
-                                                          r.resolution_status === 'refunded' ? 'bg-blue-100 text-blue-700'
+                                                          r.resolution_status === 'returned' || r.resolution_status === 'refunded' ? 'bg-green-100 text-green-700'
                                                           : r.resolution_status === 'replaced' ? 'bg-emerald-100 text-emerald-700'
                                                           : 'bg-rose-100 text-rose-700'
                                                         }`}>
-                                                          {r.resolution_status || 'Pending'}
+                                                          {r.resolution_status === 'refunded' ? 'returned' : r.resolution_status || 'Pending'}
                                                         </span>
-                                                        {r.resolution_status === 'refunded' && r.unit_cost && r.return_qty && (
+                                                        {(r.resolution_status === 'returned' || r.resolution_status === 'refunded') && r.unit_cost && r.return_qty && (
                                                           <span className='text-rose-500'>-₱{(r.unit_cost * r.return_qty).toLocaleString()} deducted</span>
                                                         )}
                                                         {r.resolution_status === 'replaced' && (

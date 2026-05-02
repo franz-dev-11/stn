@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { Package, Calendar, Layers } from "lucide-react";
 
 const BatchRecord = () => {
   const { batchRef } = useParams();
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [batchDate, setBatchDate] = useState(null);
   const [currentStock, setCurrentStock] = useState(null);
@@ -156,6 +157,39 @@ const BatchRecord = () => {
               </p>
             </div>
           </div>
+
+          {/* PO Number - Clickable */}
+          {items[0]?.order_number ? (
+            <div className="flex items-start gap-3">
+              <Package size={16} className="text-teal-500 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                  PO Number
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate("/purchase-history", { state: { orderNumber: items[0].order_number } });
+                  }}
+                  className="text-sm font-black text-teal-600 uppercase mt-0.5 hover:text-teal-800 hover:underline hover:cursor-pointer active:text-teal-900 transition-all cursor-pointer"
+                >
+                  {items[0].order_number}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <Package size={16} className="text-amber-500 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest">
+                  PO Number
+                </p>
+                <p className="text-sm font-black text-amber-800 uppercase mt-0.5">
+                  NOT FOUND (Debug: check console)
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Order Qty & Stock Quantity */}
           <div className="flex gap-4">

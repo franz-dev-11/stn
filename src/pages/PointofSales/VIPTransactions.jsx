@@ -20,11 +20,6 @@ const VIPTransactions = () => {
   const [submittingPayment, setSubmittingPayment] = useState(null);
   const hasAutoExpanded = useRef(false);
 
-  useEffect(() => {
-    fetchCustomers();
-    fetchOrders();
-  }, []);
-
   const fetchCustomers = async () => {
     const { data } = await supabase.from("vip_customers").select("id, name").order("name");
     setCustomers(data || []);
@@ -75,6 +70,19 @@ const VIPTransactions = () => {
     }
   };
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCustomers();
+    fetchOrders();
+    const channel = supabase
+      .channel("vip-transactions-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "vip_orders" }, fetchOrders)
+      .on("postgres_changes", { event: "*", schema: "public", table: "vip_payments" }, fetchOrders)
+      .on("postgres_changes", { event: "*", schema: "public", table: "vip_customers" }, fetchCustomers)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggleExpand = async (orderId) => {
     if (expandedOrderId === orderId) {
       setExpandedOrderId(null);
@@ -124,7 +132,7 @@ const VIPTransactions = () => {
 
   const totalBalance = filteredOrders.reduce((sum, o) => {
     const paid = (payments[o.id] || []).reduce((s, p) => s + Number(p.amount), 0);
-    return sum + Math.max(0, Number(o.grand_total) - paid);
+    return sum + Math.max(0, Math.round((Number(o.grand_total) - paid) * 100) / 100);
   }, 0);
 
   return (
@@ -207,7 +215,7 @@ const VIPTransactions = () => {
               {filteredOrders.map((order) => {
                 const orderPayments = payments[order.id] || [];
                 const totalPaid = orderPayments.reduce((s, p) => s + Number(p.amount), 0);
-                const outstanding = Math.max(0, Number(order.grand_total) - totalPaid);
+                const outstanding = Math.max(0, Math.round((Number(order.grand_total) - totalPaid) * 100) / 100);
                 const isExpanded = expandedOrderId === order.id;
                 const items = orderItems[order.id] || [];
 
@@ -258,21 +266,55 @@ const VIPTransactions = () => {
                                       <th className="py-2 px-3 text-left">Item</th>
                                       <th className="py-2 px-3 text-left">Batch</th>
                                       <th className="py-2 px-3 text-center">Qty</th>
-                                      <th className="py-2 px-3 text-right">Price</th>
+                                      <th className="py-2 px-3 text-right">Original Price</th>
+                                      <th className="py-2 px-3 text-right">Discount</th>
+                                      <th className="py-2 px-3 text-right">Final Price</th>
                                       <th className="py-2 px-3 text-right">Subtotal</th>
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {items.map((item) => (
-                                      <tr key={item.id} className="border-b border-slate-100">
-                                        <td className="py-2 px-3 font-black uppercase">{item.item_name}</td>
-                                        <td className="py-2 px-3 font-mono text-teal-600">{item.batch_number || "—"}</td>
-                                        <td className="py-2 px-3 text-center font-bold">{item.quantity}</td>
-                                        <td className="py-2 px-3 text-right font-bold">₱{Number(item.unit_price).toLocaleString()}</td>
-                                        <td className="py-2 px-3 text-right font-black">₱{Number(item.subtotal).toLocaleString()}</td>
-                                      </tr>
-                                    ))}
+                                    {items.map((item) => {
+                                      const originalPrice = item.original_price || item.unit_price / (1 - (item.item_discount_pct || 0) / 100);
+                                      const discountAmount = originalPrice * item.quantity * ((item.item_discount_pct || 0) / 100);
+                                      return (
+                                        <tr key={item.id} className="border-b border-slate-100">
+                                          <td className="py-2 px-3 font-black uppercase">{item.item_name}</td>
+                                          <td className="py-2 px-3 font-mono text-teal-600">{item.batch_number || "—"}</td>
+                                          <td className="py-2 px-3 text-center font-bold">{item.quantity}</td>
+                                          <td className="py-2 px-3 text-right font-bold">₱{Number(originalPrice).toLocaleString()}</td>
+                                          <td className="py-2 px-3 text-right font-bold text-rose-500">{item.item_discount_pct > 0 ? `-${item.item_discount_pct}% (₱${discountAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })})` : "—"}</td>
+                                          <td className="py-2 px-3 text-right font-bold">₱{Number(item.unit_price).toLocaleString()}</td>
+                                          <td className="py-2 px-3 text-right font-black">₱{Number(item.subtotal).toLocaleString()}</td>
+                                        </tr>
+                                      );
+                                    })}
                                   </tbody>
+                                  <tfoot>
+                                    {(() => {
+                                      const itemsSubtotal = items.reduce((s, it) => s + Number(it.subtotal), 0);
+                                      const globalDisc = Math.round((itemsSubtotal - Number(order.grand_total)) * 100) / 100;
+                                      return (
+                                        <>
+                                          {globalDisc > 0 && (
+                                            <>
+                                              <tr className="border-t border-slate-200">
+                                                <td colSpan={4} className="py-1 px-3 text-right text-[10px] font-bold text-slate-400 uppercase">Items Subtotal:</td>
+                                                <td className="py-1 px-3 text-right font-bold text-slate-500">₱{itemsSubtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                              </tr>
+                                              <tr>
+                                                <td colSpan={4} className="py-1 px-3 text-right text-[10px] font-black text-rose-500 uppercase">Discount:</td>
+                                                <td className="py-1 px-3 text-right font-black text-rose-500">-₱{globalDisc.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                              </tr>
+                                            </>
+                                          )}
+                                          <tr className="border-t-2 border-slate-200">
+                                            <td colSpan={4} className="py-2 px-3 text-right text-[10px] font-black uppercase text-slate-600">Grand Total:</td>
+                                            <td className="py-2 px-3 text-right font-black">₱{Number(order.grand_total).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                          </tr>
+                                        </>
+                                      );
+                                    })()}
+                                  </tfoot>
                                 </table>
                               </div>
 

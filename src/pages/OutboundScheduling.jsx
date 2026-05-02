@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
 import FullCalendar from "@fullcalendar/react";
@@ -16,20 +16,44 @@ import {
   Filter,
   Clock,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 const OutboundScheduling = () => {
+  const navigate = useNavigate();
   const location = useLocation();
   const [transactions, setTransactions] = useState([]);
   const [viewMode, setViewMode] = useState("table");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState(location.state?.filterStatus || "All Statuses");
+  const [expandedSOs, setExpandedSOs] = useState(new Set());
+  const toggleSO = (id) =>
+    setExpandedSOs((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const [statusChanged, setStatusChanged] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.filterStatus && !statusChanged) {
+      setFilterStatus(location.state.filterStatus);
+      setStatusChanged(true);
+    }
+  }, [location.state?.filterStatus]);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ delivery_date: "", status: "" });
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     fetchTransactions();
+    const channel = supabase
+      .channel("outbound-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_transactions" }, fetchTransactions)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_items" }, fetchTransactions)
+      .subscribe();
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const fetchTransactions = async () => {
@@ -47,7 +71,6 @@ const OutboundScheduling = () => {
   };
 
   const handleSave = async (id) => {
-    console.log("--- Starting Outbound Save Process ---");
     try {
       // 1. Fetch current database state
       const { data: order, error: fetchErr } = await supabase
@@ -96,7 +119,6 @@ const OutboundScheduling = () => {
 
       // 3. IF COMPLETED: Process Inventory and Ledger updates
       if (isBecomingCompleted) {
-        console.log("Status is Completed. Processing Inventory & Ledger...");
 
         for (const item of order.sales_items) {
           // A. Fetch current hardware inventory
@@ -234,18 +256,16 @@ const OutboundScheduling = () => {
       .map((tx) => {
         const displayStatus = tx.status === 'Cancelled' ? 'Cancelled' : (tx.status === 'Completed' || tx.status === 'Delivered') ? tx.status : tx.status === 'In Transit' ? 'In Transit' : 'Pending';
         const colors = statusColors[displayStatus] || { background: '#9ca3af', text: '#fff' };
+        const itemCount = tx.sales_items?.length || 0;
         return {
           id: String(tx.id),
-          title: `${tx.so_number} • ${tx.customer_name}`,
+          title: `${tx.so_number} · ${itemCount} item${itemCount !== 1 ? 's' : ''}`,
           start: tx.delivery_date,
           allDay: true,
           backgroundColor: colors.background,
           textColor: colors.text,
           borderColor: colors.background,
-          extendedProps: {
-            status: displayStatus,
-            lineItems: tx.sales_items?.length || 0,
-          },
+          extendedProps: { status: displayStatus, soNumber: tx.so_number },
         };
       });
   }, [filteredTransactions]);
@@ -428,7 +448,6 @@ const OutboundScheduling = () => {
             <option>Active Orders</option>
             <option>Pending</option>
             <option>In Transit</option>
-            <option>Delivered</option>
             <option>Completed</option>
           </select>
         </div>
@@ -455,22 +474,35 @@ const OutboundScheduling = () => {
                       className='hover:bg-yellow-50 transition-colors'
                     >
                       <td className='p-6'>
-                        <p className='font-mono text-teal-700 font-black text-sm mb-1'>
-                          #{tx.so_number}
-                        </p>
-                        <p className='font-black uppercase text-lg leading-none mb-2'>
-                          {tx.customer_name}
-                        </p>
-                        <div className='flex flex-wrap gap-2 mt-2'>
-                          {tx.sales_items?.map((item, idx) => (
-                            <span
-                              key={idx}
-                              className='text-[10px] bg-white px-2 py-1 rounded font-black text-black uppercase'
-                            >
-                              {item.item_name} (x{item.quantity})
-                            </span>
-                          ))}
-                        </div>
+                        <button
+                          onClick={() => toggleSO(tx.id)}
+                          className='flex items-center gap-2 w-full text-left mb-1'
+                        >
+                          {expandedSOs.has(tx.id)
+                            ? <ChevronDown size={14} className='shrink-0 text-teal-600' />
+                            : <ChevronRight size={14} className='shrink-0 text-teal-600' />}
+                          <span className='font-mono text-teal-700 font-black text-sm'>
+                            #{tx.so_number}
+                          </span>
+                          <span className='font-black uppercase text-sm text-slate-700'>
+                            {tx.customer_name}
+                          </span>
+                          <span className='font-bold text-[10px] text-slate-500 uppercase'>
+                            {tx.sales_items?.length || 0} item{(tx.sales_items?.length || 0) !== 1 ? 's' : ''}
+                          </span>
+                        </button>
+                        {expandedSOs.has(tx.id) && (
+                          <div className='flex flex-wrap gap-2 mt-2 pl-5'>
+                            {tx.sales_items?.map((item, idx) => (
+                              <span
+                                key={idx}
+                                className='text-[10px] bg-slate-100 px-2 py-1 rounded font-black text-black uppercase'
+                              >
+                                {item.item_name} (x{item.quantity})
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className='p-6'>
                         {editingId === tx.id ? (
@@ -500,7 +532,6 @@ const OutboundScheduling = () => {
                           >
                             <option value='Pending'>Pending</option>
                             <option value='In Transit'>In Transit</option>
-                            <option value='Delivered'>Delivered</option>
                             <option value='Completed'>Completed</option>
                           </select>
                         ) : (
@@ -577,6 +608,9 @@ const OutboundScheduling = () => {
             events={calendarEvents}
             eventDisplay='block'
             dayMaxEvents={3}
+            eventClick={(info) => {
+              navigate("/invoice-history", { state: { soNumber: info.event.extendedProps.soNumber } });
+            }}
           />
         </div>
       )}

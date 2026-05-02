@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabaseClient";
+import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 import { Plus, Trash2, UserPlus, Users, CheckCircle, AlertCircle, Upload, Download, RefreshCw } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -622,6 +623,14 @@ function BatchForm() {
 
       const { error } = await supabase.from("users").insert(payload);
       if (error) throw error;
+
+      const sessionUser = getSessionUser();
+      await insertAuditTrail([{
+        action: "BATCH_ACCOUNT",
+        performed_by: getPerformedBy(sessionUser),
+        quantity: payload.length,
+        item_name: payload.map((p) => `${p.first_name} ${p.last_name}`.trim()).join(", "),
+      }]);
 
       setRows([{ ...EMPTY_ACCOUNT, _id: Date.now(), password: generatePassword() }]);
       // Refresh first row with next ID

@@ -60,9 +60,7 @@ export default function Login({ setCurrentUser }) {
       setCurrentUser(data);
       await insertAuditTrail([{
         action: "Login",
-        module: "Authentication",
         performed_by: getPerformedBy(data),
-        details: `User "${data.username}" logged in.`,
       }]);
       navigate(data.must_change_password ? "/change-password" : "/dashboard", { replace: true });
     } catch (err) {

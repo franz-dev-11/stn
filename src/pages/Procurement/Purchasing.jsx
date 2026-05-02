@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
 import { usePurchasing } from "./usePurchasingData";
 import { ItemRegistry, SupplierRegistry } from "./RegistryForms";
 import CartDrawer from "./CartDrawer";
@@ -88,19 +89,42 @@ const Purchasing = () => {
     const email = vendor?.email || "";
     const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     const supplierItems = (data.allItems || data.items).filter((i) => i.supplier === quotationSupplier);
+
+    // 1. Generate and download CSV for supplier to fill out
+    const csvHeaders = [
+      "Product Name", "SKU", "Unit", "Last Price (PHP)",
+      "New Unit Price (PHP)", "Available Stock", "Lead Time (days)", "MOQ", "Payment Terms", "Notes",
+    ];
+    const csvRows = supplierItems.map((item) => [
+      `"${(item.name || "").replace(/"/g, '""')}"`,
+      `"${(item.sku || "N/A").replace(/"/g, '""')}"`,
+      `"${(item.unit || "—").replace(/"/g, '""')}"`,
+      Number(item.price || 0).toFixed(2),
+      "", "", "", "", "", "",
+    ]);
+    const csv = [csvHeaders.join(","), ...csvRows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `quotation_${quotationSupplier.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // 2. Open Gmail with updated body referencing CSV
     const subject = encodeURIComponent(`Request for Updated Pricing — Availed Items (${quotationSupplier}) — ${today}`);
     const itemList = supplierItems
       .map(
         (item, idx) =>
           `  ${idx + 1}. ${item.name}\n` +
-          `     SKU: ${item.sku || "N/A"} | Unit: ${item.unit || "—"} | Last Price: ₱${Number(item.price || 0).toLocaleString()}`
+          `     SKU: ${item.sku || "N/A"} | Unit: ${item.unit || "—"} | Last Price: PHP ${Number(item.price || 0).toLocaleString()}`
       )
       .join("\n");
     const body = encodeURIComponent(
       `Dear ${quotationSupplier} Sales Team,\n\n` +
       `We hope this message finds you well.\n\n` +
       `We are writing to request updated pricing for the following items that we currently source from your company. ` +
-      `Please provide your latest unit prices, lead times, and any applicable discounts or terms at your earliest convenience.\n\n` +
+      `Please fill out the CSV attached in this email and reply with the updated prices.\n\n` +
       `Items for Re-quotation:\n\n` +
       itemList +
       `\n\nFor each item, kindly include:\n` +
@@ -118,6 +142,21 @@ const Purchasing = () => {
       `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
       "_blank"
     );
+
+    // 3. Audit trail
+    const user = getSessionUser();
+    insertAuditTrail([{
+      action: "QUOTATION_REQUEST",
+      reference_number: null,
+      product_id: null,
+      item_name: null,
+      sku: null,
+      supplier: quotationSupplier,
+      quantity: supplierItems.length,
+      unit_cost: 0,
+      total_amount: 0,
+      performed_by: getPerformedBy(user),
+    }]);
   };
 
   // Filter logic para sa Catalog
