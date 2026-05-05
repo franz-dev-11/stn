@@ -79,7 +79,6 @@ const Dashboard = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [orderScheduling, setOrderScheduling] = useState([]);
   const [productPricing, setProductPricing] = useState([]);
-  const [profiles, setProfiles] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [vipOrders, setVipOrders] = useState([]);
   const [vipPayments, setVipPayments] = useState([]);
@@ -115,7 +114,6 @@ const Dashboard = () => {
         poRes,
         schedRes,
         pricingRes,
-        profilesRes,
         suppliersRes,
         vipOrdersRes,
         vipPaymentsRes,
@@ -154,7 +152,6 @@ const Dashboard = () => {
           .select(
             "product_id, supplier_cost, margin_percent, suggested_srp, manual_retail_price",
           ),
-        supabase.from("profiles").select("id, role, approval_status, is_approved"),
         supabase.from("suppliers").select("id"),
         supabase.from("vip_orders").select("id, customer_name, grand_total"),
         supabase.from("vip_payments").select("order_id, amount"),
@@ -168,7 +165,6 @@ const Dashboard = () => {
       if (poRes.error) throw poRes.error;
       if (schedRes.error) throw schedRes.error;
       if (pricingRes.error) throw pricingRes.error;
-      if (profilesRes.error) throw profilesRes.error;
       if (suppliersRes.error) throw suppliersRes.error;
       if (vipOrdersRes.error) throw vipOrdersRes.error;
       if (vipPaymentsRes.error) throw vipPaymentsRes.error;
@@ -181,7 +177,6 @@ const Dashboard = () => {
       setPurchaseOrders(poRes.data || []);
       setOrderScheduling(schedRes.data || []);
       setProductPricing(pricingRes.data || []);
-      setProfiles(profilesRes.data || []);
       setSuppliers(suppliersRes.data || []);
       setVipOrders(vipOrdersRes.data || []);
       setVipPayments(vipPaymentsRes.data || []);
@@ -631,11 +626,6 @@ const Dashboard = () => {
       return available + inbound <= minimum;
     }).length;
 
-    const pendingApprovals = profiles.filter((profile) => {
-      const approvalStatus = (profile.approval_status || "").toLowerCase();
-      return !profile.is_approved || approvalStatus === "pending";
-    }).length;
-
     // VIP customers with outstanding balance
     const vipPaymentsByOrder = vipPayments.reduce((acc, p) => {
       acc[p.order_id] = (acc[p.order_id] || 0) + Number(p.amount);
@@ -718,7 +708,6 @@ const Dashboard = () => {
       openPurchaseOrders,
       overdueInbound,
       lowCoverageSkus,
-      pendingApprovals,
       supplierCoverage,
       vipOutstandingCount,
       vipOutstandingTotal,
@@ -731,7 +720,6 @@ const Dashboard = () => {
     filteredSales,
     filteredScheduling,
     pendingInboundByProduct,
-    profiles,
     suppliers.length,
     vipOrders,
     vipPayments,
@@ -966,7 +954,7 @@ const Dashboard = () => {
       ["Low Stock Items",        kpis.lowStock.toLocaleString(),     "Below minimum level (current)",                   "#f59e0b"],
       ["Items Below Safe Level", rLowCoverage.toLocaleString(),      "Including pending stockin",                       "#ef4444"],
       ["Supplier Count",         erpOps.supplierCoverage.toLocaleString(), "Active suppliers on file",               "#64748b"],
-      ["Pending Approvals",      erpOps.pendingApprovals.toLocaleString(), "Awaiting account approval",              "#94a3b8"],
+
     ]);
 
     // ── SECTION 2: Full Inventory Listing ──
