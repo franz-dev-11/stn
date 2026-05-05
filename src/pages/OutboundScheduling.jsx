@@ -94,7 +94,7 @@ const OutboundScheduling = () => {
           delivery_date: editData.delivery_date,
           date_processed:
             (editData.status === "Completed" || editData.status === "Delivered")
-              ? order.created_at
+              ? new Date().toISOString()
               : order.date_processed,
         })
         .eq("id", id);
@@ -550,7 +550,9 @@ const OutboundScheduling = () => {
                       </td>
                       <td className='p-6'>
                         <span className='text-xs font-black uppercase text-slate-700'>
-                          {tx.created_at ? new Date(tx.created_at).toLocaleString() : '—'}
+                          {(tx.status === 'Completed' || tx.status === 'Delivered')
+                            ? (tx.date_processed ? new Date(tx.date_processed).toLocaleString() : '—')
+                            : '—'}
                         </span>
                       </td>
                       <td className='p-6 text-right'>
@@ -572,7 +574,8 @@ const OutboundScheduling = () => {
                         ) : (
                           <button
                             onClick={() => handleEdit(tx)}
-                            className='p-3 hover:bg-slate-100 rounded-xl transition-all'
+                            disabled={tx.status === 'Completed' || tx.status === 'Delivered'}
+                            className={`p-3 rounded-xl transition-all ${tx.status === 'Completed' || tx.status === 'Delivered' ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-100'}`}
                           >
                             <Edit3 size={24} strokeWidth={2.5} />
                           </button>

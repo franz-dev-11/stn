@@ -647,10 +647,10 @@ const Dashboard = () => {
       {
         lane: "Sales",
         pending: filteredSales.filter(
-          (row) => (row.status || "").toLowerCase() === "pending",
+          (row) => (row.status || "").toLowerCase() === "pending" && (row.transaction_type || "").toLowerCase() !== "walk-in",
         ).length,
         inProgress: filteredSales.filter(
-          (row) => (row.status || "").toLowerCase() === "in transit",
+          (row) => (row.status || "").toLowerCase() === "in transit" && (row.transaction_type || "").toLowerCase() !== "walk-in",
         ).length,
         done: filteredSales.filter(
           (row) => (row.status || "").toLowerCase() === "completed",
@@ -676,7 +676,7 @@ const Dashboard = () => {
         ).length,
         inProgress: filteredPO.filter((row) => {
           const status = (row.status || "").toLowerCase();
-          return ["approved", "in progress", "processing"].includes(status);
+          return ["approved", "in progress", "processing", "in transit"].includes(status);
         }).length,
         done: filteredPO.filter((row) => {
           const status = (row.status || "").toLowerCase();

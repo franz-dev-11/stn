@@ -174,13 +174,21 @@ const RecordSales = () => {
       );
 
       // 1. Create the Transaction Record
+      const _now = new Date();
+      const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
       const { data: txData, error: txErr } = await supabase
         .from("sales_transactions")
         .insert([
           {
             so_number: soNum,
-            customer_name: customerName,            transaction_type: transactionType,            total_amount: totalAmount,
+            customer_name: customerName,
+            transaction_type: transactionType,
+            total_amount: totalAmount,
             status: transactionType === "walk-in" ? "Completed" : "Pending",
+            ...(transactionType === "walk-in" && {
+              date_processed: _now.toISOString(),
+              delivery_date: _todayStr,
+            }),
           },
         ])
         .select()
@@ -204,7 +212,7 @@ const RecordSales = () => {
 
       if (itemsErr) throw itemsErr;
 
-      // 3. Deduct Stock from Batches
+      // 3. Deduct Stock from Batches and update hardware_inventory tallies
       for (const item of cart) {
         const { error: stockErr } = await supabase
           .from("inventory_batches")
@@ -214,6 +222,20 @@ const RecordSales = () => {
           .eq("id", item.activeBatch.id);
 
         if (stockErr) console.error("Stock update error:", stockErr);
+
+        const { data: inv } = await supabase
+          .from("hardware_inventory")
+          .select("stock_balance, outbound_qty")
+          .eq("id", item.id)
+          .single();
+
+        await supabase
+          .from("hardware_inventory")
+          .update({
+            stock_balance: Number(inv?.stock_balance || 0) - Number(item.quantity),
+            outbound_qty: Number(inv?.outbound_qty || 0) + Number(item.quantity),
+          })
+          .eq("id", item.id);
       }
 
       // Audit trail — one row per item sold

@@ -174,10 +174,34 @@ const InboundPricing = () => {
     if (!file) return;
     setIsUploading(true);
     try {
+      const parseNum = (s) => Math.max(0, parseFloat(String(s || "").replace(/,/g, "")) || 0);
+      const parseCSVLine = (line) => {
+        const result = [];
+        let i = 0;
+        while (i <= line.length) {
+          if (line[i] === '"') {
+            let field = "";
+            i++;
+            while (i < line.length) {
+              if (line[i] === '"' && line[i + 1] === '"') { field += '"'; i += 2; }
+              else if (line[i] === '"') { i++; break; }
+              else field += line[i++];
+            }
+            result.push(field.trim());
+            if (line[i] === ",") i++;
+          } else {
+            const end = line.indexOf(",", i);
+            if (end === -1) { result.push(line.slice(i).trim()); break; }
+            result.push(line.slice(i, end).trim());
+            i = end + 1;
+          }
+        }
+        return result;
+      };
       const text = await file.text();
       const lines = text.trim().split("\n");
       if (lines.length < 2) throw new Error("CSV has no data rows.");
-      const headerRow = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, "").toLowerCase());
+      const headerRow = parseCSVLine(lines[0]).map((h) => h.toLowerCase());
       const col = {
         sku: headerRow.findIndex((h) => h === "sku"),
         supplier_cost: headerRow.findIndex((h) => h.includes("supplier cost")),
@@ -189,17 +213,17 @@ const InboundPricing = () => {
       const updates = [];
       for (let i = 1; i < lines.length; i++) {
         if (!lines[i].trim()) continue;
-        const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+        const cols = parseCSVLine(lines[i]);
         const sku = cols[col.sku];
         if (!sku) continue;
         const match = pricingData.find((p) => p.hardware_inventory?.sku?.toLowerCase() === sku.toLowerCase());
         if (!match) continue;
         updates.push({
           id: match.id,
-          supplier_cost: col.supplier_cost !== -1 ? Math.max(0, parseFloat(cols[col.supplier_cost]) || 0) : null,
-          margin_percent: col.margin !== -1 ? Math.max(0, parseFloat(cols[col.margin]) || 0) : null,
-          suggested_srp: col.suggested_srp !== -1 ? Math.max(0, parseFloat(cols[col.suggested_srp]) || 0) : null,
-          manual_retail_price: col.retail_price !== -1 ? Math.max(0, parseFloat(cols[col.retail_price]) || 0) : null,
+          supplier_cost: col.supplier_cost !== -1 ? parseNum(cols[col.supplier_cost]) : null,
+          margin_percent: col.margin !== -1 ? parseNum(cols[col.margin]) : null,
+          suggested_srp: col.suggested_srp !== -1 ? parseNum(cols[col.suggested_srp]) : null,
+          manual_retail_price: col.retail_price !== -1 ? parseNum(cols[col.retail_price]) : null,
         });
       }
       if (updates.length === 0) throw new Error("No matching SKUs found. Ensure SKU column matches items in the system.");

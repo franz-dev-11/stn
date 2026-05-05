@@ -200,7 +200,8 @@ const PurchaseHistory = () => {
             .eq("id", productId);
 
           // Record to daily_ledger_history
-          const today = new Date().toISOString().split("T")[0];
+          const _d1 = new Date();
+          const today = `${_d1.getFullYear()}-${String(_d1.getMonth() + 1).padStart(2, "0")}-${String(_d1.getDate()).padStart(2, "0")}`;
           await supabase.from("daily_ledger_history").insert([{
             product_id: productId,
             item_name: item.hardware_inventory?.name || null,
@@ -364,7 +365,8 @@ const PurchaseHistory = () => {
         if (returnErr) throw new Error(`Audit insert error: ${returnErr.message}`);
 
         // 5. Update daily_ledger_history record for today with corrected inbound_qty
-        const today = new Date().toISOString().split("T")[0];
+        const _d2 = new Date();
+        const today = `${_d2.getFullYear()}-${String(_d2.getMonth() + 1).padStart(2, "0")}-${String(_d2.getDate()).padStart(2, "0")}`;
         const { data: existingLedger } = await supabase
           .from("daily_ledger_history")
           .select("id, inbound_qty, outbound_qty")

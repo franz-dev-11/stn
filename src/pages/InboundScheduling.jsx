@@ -191,6 +191,15 @@ const InboundScheduling = () => {
         }
       }
 
+      // Sync purchase_orders status with order_scheduling status
+      if (orderNumber) {
+        const poStatus = editData.status === "Arrived" ? "Received" : editData.status;
+        await supabase
+          .from("purchase_orders")
+          .update({ status: poStatus })
+          .eq("po_number", orderNumber);
+      }
+
       alert("Success! Order group updated.");
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
