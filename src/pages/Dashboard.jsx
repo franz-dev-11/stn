@@ -121,7 +121,7 @@ const Dashboard = () => {
         supabase
           .from("hardware_inventory")
           .select(
-            "id, sku, name, category, quantity, min_stock_level, inbound_qty, outbound_qty, stock_balance",
+            "id, sku, name, category, min_stock_level, inbound_qty, outbound_qty, stock_balance",
           ),
         supabase
           .from("daily_ledger_history")
