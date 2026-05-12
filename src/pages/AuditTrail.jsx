@@ -15,6 +15,7 @@ import {
   UserPlus,
   Mail,
   Download,
+  Tag,
 } from "lucide-react";
 
 const ACTION_META = {
@@ -67,6 +68,11 @@ const ACTION_META = {
     label: "Email Supplier",
     icon: <Mail size={12} />,
     color: "bg-sky-100 text-sky-700",
+  },
+  PRICE_UPDATE: {
+    label: "Price Update",
+    icon: <Tag size={12} />,
+    color: "bg-indigo-100 text-indigo-700",
   },
 };
 
@@ -223,6 +229,7 @@ const AuditTrail = () => {
             <option value="RETURNED">Returned</option>
             <option value="BATCH_ACCOUNT">Batch Account Creation</option>
             <option value="EMAIL_SUPPLIER">Email Supplier</option>
+            <option value="PRICE_UPDATE">Price Update</option>
           </select>
         </div>
         <div className="flex items-center gap-2 shrink-0">

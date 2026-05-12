@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { RefreshCcw, Edit3, Save, X, Truck, Tag, Filter, Search, Download, Upload, Mail } from "lucide-react";
+import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 
 const InboundPricing = () => {
   const [pricingData, setPricingData] = useState([]);
@@ -64,9 +65,7 @@ const InboundPricing = () => {
         .from("product_pricing")
         .update({
           supplier_cost: parseFloat(editData.supplier_cost).toFixed(2),
-          manual_retail_price: parseFloat(editData.manual_retail_price).toFixed(
-            2,
-          ),
+          manual_retail_price: parseFloat(editData.manual_retail_price).toFixed(2),
           margin_percent: parseFloat(editData.margin_percent).toFixed(2),
           suggested_srp: parseFloat(editData.suggested_srp).toFixed(2),
           updated_at: new Date(),
@@ -74,6 +73,22 @@ const InboundPricing = () => {
         .eq("id", id);
 
       if (error) throw error;
+
+      const item = pricingData.find((p) => p.id === id);
+      const user = getSessionUser();
+      await insertAuditTrail([{
+        action: "PRICE_UPDATE",
+        reference_number: null,
+        product_id: item?.hardware_inventory?.id || null,
+        item_name: item?.hardware_inventory?.name || null,
+        sku: item?.hardware_inventory?.sku || null,
+        supplier: item?.hardware_inventory?.supplier || null,
+        quantity: null,
+        unit_cost: parseFloat(editData.supplier_cost),
+        total_amount: null,
+        performed_by: getPerformedBy(user),
+      }]);
+
       setEditingId(null);
       await fetchPricing();
     } catch (err) {
@@ -228,6 +243,8 @@ const InboundPricing = () => {
       }
       if (updates.length === 0) throw new Error("No matching SKUs found. Ensure SKU column matches items in the system.");
       let success = 0;
+      const user = getSessionUser();
+      const auditRows = [];
       for (const u of updates) {
         const payload = { updated_at: new Date() };
         if (u.supplier_cost !== null) payload.supplier_cost = u.supplier_cost.toFixed(2);
@@ -235,8 +252,24 @@ const InboundPricing = () => {
         if (u.suggested_srp !== null) payload.suggested_srp = u.suggested_srp.toFixed(2);
         if (u.manual_retail_price !== null) payload.manual_retail_price = u.manual_retail_price.toFixed(2);
         const { error } = await supabase.from("product_pricing").update(payload).eq("id", u.id);
-        if (!error) success++;
+        if (!error) {
+          success++;
+          const item = pricingData.find((p) => p.id === u.id);
+          auditRows.push({
+            action: "PRICE_UPDATE",
+            reference_number: null,
+            product_id: item?.hardware_inventory?.id || null,
+            item_name: item?.hardware_inventory?.name || null,
+            sku: item?.hardware_inventory?.sku || null,
+            supplier: item?.hardware_inventory?.supplier || null,
+            quantity: null,
+            unit_cost: u.supplier_cost,
+            total_amount: null,
+            performed_by: getPerformedBy(user),
+          });
+        }
       }
+      if (auditRows.length > 0) await insertAuditTrail(auditRows);
       alert(`Updated ${success} of ${updates.length} matching items.`);
       fetchPricing();
     } catch (err) {
