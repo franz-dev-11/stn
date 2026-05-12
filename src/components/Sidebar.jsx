@@ -101,7 +101,7 @@ const Sidebar = ({
         },
         {
           icon: <Truck size={20} />,
-          label: "Stockin Delivery",
+          label: "Stock-in Delivery",
           path: "/inbound",
         },
         {
@@ -138,7 +138,7 @@ const Sidebar = ({
         },
         {
           icon: <Truck size={20} />,
-          label: "Stockout Delivery",
+          label: "Stock-out Delivery",
           path: "/outbound",
         },
         {

@@ -14,6 +14,7 @@ import {
   ClipboardList,
   UserPlus,
   Mail,
+  Download,
 } from "lucide-react";
 
 const ACTION_META = {
@@ -145,6 +146,33 @@ const AuditTrail = () => {
     setCurrentPage(1);
   };
 
+  const handleExportCSV = () => {
+    const headers = ["Timestamp", "Action", "Reference", "Item", "SKU", "Supplier", "Qty", "Unit Cost", "Total Amount", "Performed By"];
+    const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = filtered.map((r) => [
+      r.created_at ? new Date(r.created_at).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "",
+      ACTION_META[r.action]?.label || r.action || "",
+      r.reference_number || "",
+      r.item_name || "",
+      r.sku || "",
+      r.supplier || "",
+      r.quantity ?? "",
+      r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : "",
+      r.total_amount != null ? Number(r.total_amount).toFixed(2) : "",
+      r.performed_by || "",
+    ].map(escape).join(","));
+    const csv = [headers.map(escape).join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const _d = new Date();
+    const dateStr = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
+    a.href = url;
+    a.download = `audit_trail_${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Summary totals
   const totals = useMemo(() => ({
     records: filtered.length,
@@ -164,20 +192,6 @@ const AuditTrail = () => {
         </p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
-        {[
-          { label: "Records", value: totals.records.toLocaleString(), sub: "matching filters" },
-          { label: "Total Qty", value: totals.qty.toLocaleString(), sub: "units across events" },
-          { label: "Total Value", value: `₱${totals.value.toLocaleString()}`, sub: "transaction value" },
-        ].map((card) => (
-          <div key={card.label} className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm">
-            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">{card.label}</p>
-            <p className="text-xl sm:text-2xl font-black mt-1">{card.value}</p>
-            <p className="text-[9px] font-bold text-slate-400 mt-0.5">{card.sub}</p>
-          </div>
-        ))}
-      </div>
 
       {/* Filters */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm mb-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
@@ -238,6 +252,13 @@ const AuditTrail = () => {
             className="text-xs font-bold bg-slate-50 border-0 rounded-xl px-3 py-2.5 outline-none"
           />
         </div>
+        <button
+          onClick={handleExportCSV}
+          disabled={filtered.length === 0}
+          className="flex items-center gap-2 px-4 py-2.5 bg-black text-white text-xs font-black uppercase rounded-xl hover:bg-slate-800 disabled:opacity-40 transition-all shrink-0"
+        >
+          <Download size={14} /> Export CSV
+        </button>
       </div>
 
       {/* Table */}

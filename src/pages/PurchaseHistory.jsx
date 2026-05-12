@@ -794,12 +794,7 @@ const PurchaseHistory = () => {
                                                 ₱{item.unit_cost?.toLocaleString()}
                                               </td>
                                               <td className='py-4 text-right text-sm font-black'>
-                                                {refundedQty > 0 ? (
-                                                  <>
-                                                    ₱{(item.unit_cost * netQty).toLocaleString()}
-                                                    <span className='block text-[9px] text-rose-500 font-bold'>-₱{(item.unit_cost * refundedQty).toLocaleString()} deducted</span>
-                                                  </>
-                                                ) : `₱${(item.unit_cost * item.quantity).toLocaleString()}`}
+                                                ₱{(item.unit_cost * item.quantity).toLocaleString()}
                                               </td>
                                             </tr>
                                             {returns.length > 0 && (
@@ -820,7 +815,7 @@ const PurchaseHistory = () => {
                                                           {r.resolution_status === 'refunded' ? 'returned' : r.resolution_status || 'Pending'}
                                                         </span>
                                                         {(r.resolution_status === 'returned' || r.resolution_status === 'refunded') && r.unit_cost && r.return_qty && (
-                                                          <span className='text-rose-500'>-₱{(r.unit_cost * r.return_qty).toLocaleString()} deducted</span>
+                                                          <span className='text-rose-500'>₱{(r.unit_cost * r.return_qty).toLocaleString()} refunded</span>
                                                         )}
                                                         {r.resolution_status === 'replaced' && (
                                                           <span className='text-emerald-600'>replacement sent</span>
@@ -836,17 +831,33 @@ const PurchaseHistory = () => {
                                       })}
                                     </tbody>
                                     <tfoot>
-                                      <tr className='border-t-2 border-slate-200'>
-                                        <td
-                                          colSpan={returnMode[receipt.id] ? 6 : 5}
-                                          className='py-6 text-right text-sm font-black uppercase text-slate-600'
-                                        >
-                                          Receipt Total:
-                                        </td>
-                                        <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>
-                                          ₱{receipt.totalAmount.toLocaleString()}
-                                        </td>
-                                      </tr>
+                                      {(() => {
+                                        const grossTotal = receipt.items.reduce((s, i) => s + (i.unit_cost || 0) * (i.quantity || 0), 0);
+                                        const totalRefunded = grossTotal - receipt.totalAmount;
+                                        const span = returnMode[receipt.id] ? 6 : 5;
+                                        return (
+                                          <>
+                                            {totalRefunded > 0 && (
+                                              <tr className='border-t border-slate-200'>
+                                                <td colSpan={span} className='py-2 text-right text-xs font-black uppercase text-slate-500'>
+                                                  Refunded Amount:
+                                                </td>
+                                                <td className='py-2 text-right text-sm font-black text-rose-500'>
+                                                  -₱{totalRefunded.toLocaleString()}
+                                                </td>
+                                              </tr>
+                                            )}
+                                            <tr className='border-t-2 border-slate-200'>
+                                              <td colSpan={span} className='py-6 text-right text-sm font-black uppercase text-slate-600'>
+                                                Receipt Total:
+                                              </td>
+                                              <td className='py-6 text-right text-xl font-black underline decoration-4 decoration-teal-500'>
+                                                ₱{receipt.totalAmount.toLocaleString()}
+                                              </td>
+                                            </tr>
+                                          </>
+                                        );
+                                      })()}
                                     </tfoot>
                                   </table>
                                 </div>
