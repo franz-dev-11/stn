@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
+import { printElement } from "../../utils/printUtils";
 import {
   Search,
   ShoppingCart,
@@ -609,7 +610,8 @@ const InvoiceView = ({ order, onBack }) => (
           <CheckCircle size={16} className='text-teal-400' /> Transaction Complete
         </h2>
         <button
-          onClick={() => window.print()}
+          type='button'
+          onClick={() => printElement(document.getElementById('print-receipt'))}
           className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'
         >
           <Printer size={14} /> Print Receipt
@@ -629,7 +631,10 @@ const InvoiceView = ({ order, onBack }) => (
             </p>
           </div>
           <div className='text-right'>
-            <p className='text-sm font-black uppercase'>
+            <p className='text-lg font-black uppercase tracking-widest'>
+              {order.soNum}
+            </p>
+            <p className='text-sm font-black uppercase mt-1'>
               Date: {order.date}
             </p>
             <p className='text-[10px] font-bold text-slate-600 uppercase'>
@@ -647,9 +652,6 @@ const InvoiceView = ({ order, onBack }) => (
             <p className='text-sm font-black uppercase'>{order.customerName}</p>
             <p className='text-xs font-medium text-slate-600 uppercase mt-0.5'>
               {order.transactionType}
-            </p>
-            <p className='text-[10px] font-bold text-slate-500 mt-1'>
-              Ref: {order.soNum}
             </p>
           </div>
           <div className='text-right'>

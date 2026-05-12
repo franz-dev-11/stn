@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { ChevronLeft, Tag, Printer, Mail, CheckCircle } from "lucide-react";
 import { insertAuditTrail, getSessionUser, getPerformedBy } from "../../utils/auditTrail";
+import { printElement } from "../../utils/printUtils";
 
 const CheckoutView = ({
   groupedOrders,
@@ -18,10 +19,6 @@ const CheckoutView = ({
       ]),
     );
   }, [groupedOrders]);
-
-  const handlePrintQuotation = () => {
-    window.print();
-  };
 
   const handleGmailSend = (supplierName, items) => {
     const supplierObj = suppliers.find((s) => s.name === supplierName);
@@ -54,15 +51,6 @@ const CheckoutView = ({
 
   return (
     <div className='w-full min-h-screen p-8 bg-white text-slate-900'>
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .print-this-only, .print-this-only * { visibility: visible !important; }
-          .print-this-only { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; border: none !important; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-
       <div className='max-w-4xl mx-auto'>
         <button
           onClick={() => setView("browse")}
@@ -127,7 +115,8 @@ const CheckoutView = ({
                 </h2>
                 <div className='flex gap-2'>
                   <button
-                    onClick={handlePrintQuotation}
+                    type='button'
+                    onClick={() => printElement(document.getElementById(`quote-${idx}`))}
                     className='bg-white text-black px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-slate-200 flex items-center gap-2'
                   >
                     <Printer size={14} /> Print PO
@@ -149,11 +138,14 @@ const CheckoutView = ({
                       Purchase Order
                     </h1>
                     <p className='text-xs font-bold text-slate-500 mt-2'>
-                      ID: {quoteIds[supName] || "QTN-0000"}
+                      {items.length} Item{items.length !== 1 ? 's' : ''}
                     </p>
                   </div>
                   <div className='text-right'>
-                    <p className='text-sm font-black uppercase'>
+                    <p className='text-lg font-black uppercase tracking-widest'>
+                      {quoteIds[supName] || "QTN-0000"}
+                    </p>
+                    <p className='text-sm font-black uppercase mt-1'>
                       Date: {new Date().toLocaleDateString()}
                     </p>
                     <p className='text-[10px] font-bold text-slate-400 uppercase'>

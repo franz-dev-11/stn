@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { printElement } from "../utils/printUtils";
 import {
   Printer,
   ChevronDown,
@@ -106,14 +107,6 @@ const InvoiceHistory = () => {
 
   return (
     <div className='p-3 sm:p-4 md:p-6 lg:p-8 bg-[#f3f4f6] min-h-screen text-black print:bg-white print:p-0 overflow-x-hidden'>
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .print-area, .print-area * { visibility: visible !important; }
-          .print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; border: none !important; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
 
       <div className='max-w-5xl mx-auto'>
         <div className='flex flex-col sm:flex-row sm:justify-between sm:items-end mb-6 sm:mb-8 gap-4 no-print'>
@@ -267,9 +260,10 @@ const InvoiceHistory = () => {
                                     <Tag size={16} /> Transaction Details
                                   </h2>
                                   <button
+                                    type='button'
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      window.print();
+                                      printElement(e.currentTarget.closest('.print-area'));
                                     }}
                                     className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'
                                   >
@@ -288,7 +282,10 @@ const InvoiceHistory = () => {
                                       </p>
                                     </div>
                                     <div className='text-right'>
-                                      <p className='text-sm font-black uppercase'>
+                                      <p className='text-lg font-black uppercase tracking-widest'>
+                                        {inv.so_number}
+                                      </p>
+                                      <p className='text-sm font-black uppercase mt-1'>
                                         Date:{" "}
                                         {new Date(inv.created_at).toLocaleDateString()}
                                       </p>

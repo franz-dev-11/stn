@@ -745,6 +745,7 @@ const Inventory = () => {
             </div>
             <div className='flex items-center gap-3'>
               <button
+                type='button'
                 onClick={handlePrint}
                 className='flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all active:scale-95'
               >

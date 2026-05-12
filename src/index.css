@@ -5,33 +5,9 @@
 }
 
 @media print {
-  /* Hide everything on the page */
-  body * {
-    visibility: hidden !important;
-  }
-
-  /* Show only the receipt card and its children */
-  #print-receipt,
-  #print-receipt * {
-    visibility: visible !important;
-  }
-
-  /* Pull the receipt to the top-left corner and fill the page */
-  #print-receipt {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 2rem !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    background: white !important;
-  }
-
-  /* Always hide no-print elements even if inside the receipt */
   .no-print {
     display: none !important;
+    visibility: hidden !important;
   }
 }
 

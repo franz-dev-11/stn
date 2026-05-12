@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
+import { printElement } from "../../utils/printUtils";
 import {
   Search,
   ShoppingCart,
@@ -603,14 +604,6 @@ const VIPInvoiceView = ({ order, onBack }) => {
 
   return (
     <div className='p-8 bg-slate-50 min-h-screen font-sans'>
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #print-receipt, #print-receipt * { visibility: visible !important; }
-          #print-receipt { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
       <div className='max-w-3xl mx-auto'>
         <button onClick={onBack} className='mb-6 flex items-center gap-2 font-black uppercase text-[10px] text-slate-400 hover:text-black no-print'>
           <ChevronLeft size={16} /> New Transaction
@@ -619,7 +612,7 @@ const VIPInvoiceView = ({ order, onBack }) => {
           <h2 className='font-black uppercase tracking-widest text-sm flex items-center gap-2'>
             <CheckCircle size={16} className='text-teal-400' /> Transaction Complete
           </h2>
-          <button onClick={() => window.print()} className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'>
+          <button type='button' onClick={() => printElement(document.getElementById('print-receipt'))} className='bg-white text-black px-4 py-2 rounded-lg text-[10px] font-black flex items-center gap-2 hover:bg-slate-200 transition-all'>
             <Printer size={14} /> Print Receipt
           </button>
         </div>
@@ -631,8 +624,9 @@ const VIPInvoiceView = ({ order, onBack }) => {
               <p className='text-xs font-bold text-slate-600 mt-2'>{order.items.length} Item{order.items.length !== 1 ? "s" : ""}</p>
             </div>
             <div className='text-right'>
-              <p className='text-sm font-black uppercase'>Date: {order.date}</p>
-              <p className='text-[10px] font-bold text-slate-600 uppercase'>Ref: {order.soNum}</p>
+              <p className='text-lg font-black uppercase tracking-widest'>{order.soNum}</p>
+              <p className='text-sm font-black uppercase mt-1'>Date: {order.date}</p>
+              <p className='text-[10px] font-bold text-slate-600 uppercase'>Billing Statement</p>
             </div>
           </div>
           {/* Billed To / Issued By */}

@@ -201,6 +201,7 @@ const VIPTransactions = () => {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-black text-white text-[10px] uppercase font-black">
+                <th className="py-3 px-4 text-left">Order #</th>
                 <th className="py-3 px-4 text-left">Customer</th>
                 <th className="py-3 px-4 text-left">Date</th>
                 <th className="py-3 px-4 text-right">Grand Total</th>
@@ -222,6 +223,7 @@ const VIPTransactions = () => {
                 return (
                   <React.Fragment key={order.id}>
                     <tr className={`border-b border-slate-100 transition-colors ${isExpanded ? "bg-teal-50" : "hover:bg-slate-50"}`}>
+                      <td className="py-3 px-4 font-mono font-black text-teal-700 text-xs">{order.so_number || '—'}</td>
                       <td className="py-3 px-4 font-black uppercase">{order.customer_name}</td>
                       <td className="py-3 px-4 text-slate-500 font-bold">
                         {new Date(order.created_at).toLocaleDateString()}
@@ -252,7 +254,7 @@ const VIPTransactions = () => {
                     {/* Expanded: Items + Payments */}
                     {isExpanded && (
                       <tr>
-                        <td colSpan={8} className="bg-slate-50 px-6 py-4">
+                        <td colSpan={9} className="bg-slate-50 px-6 py-4">
                           {loadingItems && items.length === 0 ? (
                             <p className="text-xs text-slate-400 font-bold">Loading...</p>
                           ) : (
