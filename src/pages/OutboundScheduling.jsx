@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
-import { formatPSTDateTime, convertToPhilippineDate, convertIsoToDateInput, formatPSTDate } from "../utils/dateTimeUtils";
+import { formatPSTDateTime, convertToPhilippineDate, convertIsoToDateInput, formatPSTDate, getCalendarDateFromISO } from "../utils/dateTimeUtils";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -261,7 +261,7 @@ const OutboundScheduling = () => {
         return {
           id: String(tx.id),
           title: `${tx.so_number} · ${itemCount} item${itemCount !== 1 ? 's' : ''}`,
-          start: tx.delivery_date,
+          start: getCalendarDateFromISO(tx.delivery_date),
           allDay: true,
           backgroundColor: colors.background,
           textColor: colors.text,

@@ -100,23 +100,24 @@ export const getCurrentPSTDate = () => {
 };
 
 /**
- * Convert a date string (YYYY-MM-DD) from HTML input to PST ISO string
- * Takes a date string and converts it to an ISO string representing that date at midnight in PST
- * @param {string} dateString - Date string in YYYY-MM-DD format from HTML input
- * @returns {string} ISO string representing the date at midnight in PST
+ * Convert a date string (YYYY-MM-DD) from HTML input to ISO string in PST timezone
+ * Takes a date like "2026-05-20" and returns ISO string representing that date at midnight PST
+ * @param {string} dateString - Date string in YYYY-MM-DD format
+ * @returns {string} ISO string representing midnight PST of that date
  */
 export const convertToPhilippineDate = (dateString) => {
   if (!dateString) return null;
   
   try {
-    // Create a date at midnight UTC first
-    const utcDate = new Date(`${dateString}T00:00:00Z`);
+    // Parse the date string
+    const date = new Date(dateString + 'T00:00:00');
     
-    // PST is UTC+8, so subtract 8 hours to get the UTC time that represents midnight PST
-    const pstOffsetMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-    const adjustedDate = new Date(utcDate.getTime() - pstOffsetMs);
+    // PST is UTC+8. To convert a PST time to UTC, we subtract 8 hours
+    // So midnight PST = 16:00 UTC of the previous day (minus 8 hours)
+    const pstOffsetMs = 8 * 60 * 60 * 1000;
+    const utcDate = new Date(date.getTime() - pstOffsetMs);
     
-    return adjustedDate.toISOString();
+    return utcDate.toISOString();
   } catch (err) {
     console.error("Error converting date to PST:", err);
     return null;
@@ -124,28 +125,39 @@ export const convertToPhilippineDate = (dateString) => {
 };
 
 /**
- * Convert ISO string back to YYYY-MM-DD format for HTML date input
- * Accounts for PST timezone when converting
+ * Convert ISO string to YYYY-MM-DD format for HTML date input in PST
  * @param {string} isoString - ISO date string from database
- * @returns {string} Date string in YYYY-MM-DD format as it should appear in PST
+ * @returns {string} Date string in YYYY-MM-DD format as it appears in PST
  */
 export const convertIsoToDateInput = (isoString) => {
   if (!isoString) return "";
   
   try {
     const date = new Date(isoString);
-    // Format the date as it would appear in PST
-    const pstDateStr = date.toLocaleDateString("en-CA", { 
-      timeZone: "Asia/Manila",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
+    
+    // Format in PST timezone to get the actual date in that timezone
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
     });
-    return pstDateStr;
+    
+    return formatter.format(date);
   } catch (err) {
     console.error("Error converting ISO to date input:", err);
     return "";
   }
+};
+
+/**
+ * Convert ISO string to date-only string for calendar (YYYY-MM-DD)
+ * Ensures the date displays correctly in PST timezone for calendar events
+ * @param {string} isoString - ISO date string from database
+ * @returns {string} Date string in YYYY-MM-DD format for calendar
+ */
+export const getCalendarDateFromISO = (isoString) => {
+  return convertIsoToDateInput(isoString);
 };
 
 /**
