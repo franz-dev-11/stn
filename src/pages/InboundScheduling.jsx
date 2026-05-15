@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
-import { formatPSTDateTime } from "../utils/dateTimeUtils";
+import { formatPSTDateTime, getCurrentPSTDateTime } from "../utils/dateTimeUtils";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -118,7 +118,7 @@ const InboundScheduling = () => {
             status: editData.status,
             date_arrived:
               editData.status === "Arrived"
-                ? new Date().toISOString()
+                ? getCurrentPSTDateTime()
                 : orderData.date_arrived,
             date_processed:
               editData.status === "Arrived"
@@ -166,7 +166,7 @@ const InboundScheduling = () => {
                   product_id: orderData.product_id,
                   batch_number: batchNumber,
                   current_stock: orderData.quantity,
-                  batch_date: new Date().toISOString(),
+                  batch_date: getCurrentPSTDateTime(),
                   unit_cost: orderData.unit_cost || 0,
                 },
               ]);

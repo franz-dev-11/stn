@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 import { printElement } from "../utils/printUtils";
-import { formatPSTDate, formatPSTDateTime } from "../utils/dateTimeUtils";
+import { formatPSTDate, formatPSTDateTime, getCurrentPSTDateTime } from "../utils/dateTimeUtils";
 import {
   Printer,
   ChevronDown,
@@ -231,7 +231,7 @@ const PurchaseHistory = () => {
               product_id: productId,
               batch_number: batchNumber,
               current_stock: netQty,
-              batch_date: new Date().toISOString(),
+              batch_date: getCurrentPSTDateTime(),
             }]);
         }
         // If batch already exists (created by InboundScheduling on "Arrived"), don't add again

@@ -100,6 +100,61 @@ export const getCurrentPSTDate = () => {
 };
 
 /**
+ * Get current datetime in Philippine Standard Time as ISO string
+ * @returns {string} Current datetime in ISO format representing PST
+ */
+export const getCurrentPSTDateTime = () => {
+  const now = new Date();
+  
+  // Get the time parts in PST
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(now);
+  
+  let year, month, day, hour, minute, second;
+  for (const part of parts) {
+    if (part.type === 'year') year = part.value;
+    if (part.type === 'month') month = part.value;
+    if (part.type === 'day') day = part.value;
+    if (part.type === 'hour') hour = part.value;
+    if (part.type === 'minute') minute = part.value;
+    if (part.type === 'second') second = part.value;
+  }
+  
+  // PST is UTC+8, so to get ISO string representing this PST time:
+  // Subtract 8 hours to get the UTC equivalent
+  const pstTime = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+  const pstOffsetMs = 8 * 60 * 60 * 1000;
+  const utcEquivalent = new Date(pstTime.getTime() - pstOffsetMs);
+  
+  return utcEquivalent.toISOString();
+};
+
+/**
+ * Get today's date in Philippine Standard Time as YYYY-MM-DD
+ * @returns {string} Today's date in YYYY-MM-DD format in PST
+ */
+export const getTodayPSTDateString = () => {
+  const now = new Date();
+  
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  
+  return formatter.format(now);
+};
+
+/**
  * Convert a date string (YYYY-MM-DD) from HTML input to ISO string in PST timezone
  * Takes a date like "2026-05-20" and returns ISO string representing that date at midnight PST
  * @param {string} dateString - Date string in YYYY-MM-DD format

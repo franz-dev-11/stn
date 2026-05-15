@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
-import { formatPSTDateTime, convertToPhilippineDate, convertIsoToDateInput, formatPSTDate, getCalendarDateFromISO } from "../utils/dateTimeUtils";
+import { formatPSTDateTime, convertToPhilippineDate, convertIsoToDateInput, formatPSTDate, getCalendarDateFromISO, getCurrentPSTDateTime } from "../utils/dateTimeUtils";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -95,7 +95,7 @@ const OutboundScheduling = () => {
           delivery_date: convertToPhilippineDate(editData.delivery_date),
           date_processed:
             (editData.status === "Completed" || editData.status === "Delivered")
-              ? new Date().toISOString()
+              ? getCurrentPSTDateTime()
               : order.date_processed,
         })
         .eq("id", id);
@@ -180,7 +180,7 @@ const OutboundScheduling = () => {
               item_name: item.item_name,
               quantity: Number(item.quantity),
               amount: Number(item.quantity) * Number(item.unit_price || 0),
-              timestamp: new Date().toISOString(),
+              timestamp: getCurrentPSTDateTime(),
             },
           ]);
 

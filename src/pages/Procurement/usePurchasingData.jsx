@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
+import { getCurrentPSTDateTime } from "../../utils/dateTimeUtils";
 
 export const usePurchasing = () => {
   const [view, setView] = useState("browse");
@@ -95,7 +96,7 @@ export const usePurchasing = () => {
     if (cart.length === 0) return;
     setIsCompleting(true);
     try {
-      const now = new Date().toISOString();
+      const now = getCurrentPSTDateTime();
       const year = new Date().getFullYear();
       const poPrefix = `PO-${year}`;
       const { data: latestPO } = await supabase

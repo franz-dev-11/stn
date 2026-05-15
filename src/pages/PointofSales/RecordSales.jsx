@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
 import { printElement } from "../../utils/printUtils";
-import { formatPSTDate } from "../../utils/dateTimeUtils";
+import { formatPSTDate, getCurrentPSTDateTime, getTodayPSTDateString } from "../../utils/dateTimeUtils";
 import {
   Search,
   ShoppingCart,
@@ -176,8 +176,7 @@ const RecordSales = () => {
       );
 
       // 1. Create the Transaction Record
-      const _now = new Date();
-      const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+      const _todayStr = getTodayPSTDateString();
       const { data: txData, error: txErr } = await supabase
         .from("sales_transactions")
         .insert([
@@ -188,7 +187,7 @@ const RecordSales = () => {
             total_amount: totalAmount,
             status: transactionType === "walk-in" ? "Completed" : "Pending",
             ...(transactionType === "walk-in" && {
-              date_processed: _now.toISOString(),
+              date_processed: getCurrentPSTDateTime(),
               delivery_date: _todayStr,
             }),
           },
