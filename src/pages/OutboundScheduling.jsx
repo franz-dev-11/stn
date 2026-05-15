@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
-import { formatPSTDateTime } from "../utils/dateTimeUtils";
+import { formatPSTDateTime, convertToPhilippineDate } from "../utils/dateTimeUtils";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -92,7 +92,7 @@ const OutboundScheduling = () => {
         .from("sales_transactions")
         .update({
           status: editData.status,
-          delivery_date: editData.delivery_date,
+          delivery_date: convertToPhilippineDate(editData.delivery_date),
           date_processed:
             (editData.status === "Completed" || editData.status === "Delivered")
               ? new Date().toISOString()

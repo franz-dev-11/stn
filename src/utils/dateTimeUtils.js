@@ -100,6 +100,51 @@ export const getCurrentPSTDate = () => {
 };
 
 /**
+ * Convert a date string (YYYY-MM-DD) from HTML input to PST ISO string
+ * The HTML date input provides local date, this converts it properly to PST
+ * @param {string} dateString - Date string in YYYY-MM-DD format from HTML input
+ * @returns {string} ISO string in PST timezone
+ */
+export const convertToPhilippineDate = (dateString) => {
+  if (!dateString) return null;
+  
+  try {
+    // Parse the YYYY-MM-DD string
+    const [year, month, day] = dateString.split('-');
+    
+    // Create a date at midnight in PST (Asia/Manila)
+    // We use the toLocaleString method to interpret the date as PST
+    const pstDateString = new Date(`${year}-${month}-${day}T00:00:00`).toLocaleString('en-US', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
+    // Parse back to get UTC equivalent
+    const [datePart, timePart] = pstDateString.split(', ');
+    const [m, d, y] = datePart.split('/');
+    const [h, min, s] = timePart.split(':');
+    
+    // Create the date in UTC that represents midnight in PST
+    const date = new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`);
+    
+    // Adjust for the timezone offset (PST is UTC+8)
+    const offsetMinutes = 8 * 60; // 480 minutes
+    const adjustedDate = new Date(date.getTime() - offsetMinutes * 60 * 1000);
+    
+    return adjustedDate.toISOString();
+  } catch (err) {
+    console.error("Error converting date to PST:", err);
+    return dateString; // Fallback to original string
+  }
+};
+
+/**
  * Format date in full locale format for Philippine Standard Time
  * @param {Date|string} dateInput - Date object or ISO string
  * @returns {string} Formatted full date string (e.g., "May 15, 2026")
