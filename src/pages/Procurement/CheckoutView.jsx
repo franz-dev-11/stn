@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { ChevronLeft, Tag, Printer, Mail, CheckCircle } from "lucide-react";
 import { insertAuditTrail, getSessionUser, getPerformedBy } from "../../utils/auditTrail";
 import { printElement } from "../../utils/printUtils";
+import { formatPSTDate } from "../../utils/dateTimeUtils";
 
 const CheckoutView = ({
   groupedOrders,
@@ -146,7 +147,7 @@ const CheckoutView = ({
                       {quoteIds[supName] || "QTN-0000"}
                     </p>
                     <p className='text-sm font-black uppercase mt-1'>
-                      Date: {new Date().toLocaleDateString()}
+                      Date: {formatPSTDate(new Date())}
                     </p>
                     <p className='text-[10px] font-bold text-slate-400 uppercase'>
                       Procurement Dept

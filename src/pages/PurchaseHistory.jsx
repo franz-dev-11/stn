@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 import { printElement } from "../utils/printUtils";
+import { formatPSTDate, formatPSTDateTime } from "../utils/dateTimeUtils";
 import {
   Printer,
   ChevronDown,
@@ -440,7 +441,7 @@ const PurchaseHistory = () => {
     const body = encodeURIComponent(
       `Dear ${receipt.supplier},\n\n` +
       `We are writing to formally request a return for the following item(s) from Order #${receipt.order_number} ` +
-      `dated ${new Date(receipt.date_ordered).toLocaleDateString()}:\n\n` +
+      `dated ${formatPSTDate(receipt.date_ordered)}:\n\n` +
       selectedItems
         .map(
           ({ item, returnQty }) =>
@@ -567,7 +568,7 @@ const PurchaseHistory = () => {
                           className='hover:bg-slate-50 cursor-pointer transition-colors'
                         >
                           <td className='px-6 py-4 text-[10px] font-bold text-slate-500 whitespace-nowrap'>
-                            {new Date(receipt.date_ordered).toLocaleDateString()}
+                            {formatPSTDate(receipt.date_ordered)}
                           </td>
                           <td className='px-6 py-4 font-mono font-black text-xs text-teal-700'>
                             {receipt.order_number}
@@ -695,9 +696,7 @@ const PurchaseHistory = () => {
                                       </p>
                                       <p className='text-sm font-black uppercase mt-1'>
                                         Date:{" "}
-                                        {new Date(
-                                          receipt.date_ordered,
-                                        ).toLocaleDateString()}
+                                        {formatPSTDate(receipt.date_ordered)}
                                       </p>
                                       <p className='text-[10px] font-bold text-slate-600 uppercase'>
                                         Receipt Summary
@@ -801,7 +800,7 @@ const PurchaseHistory = () => {
                                                   <div className='space-y-1'>
                                                     {returns.map((r, rIdx) => (
                                                       <div key={rIdx} className='flex items-center gap-4 text-[9px] font-bold text-rose-700'>
-                                                        <span>{r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</span>
+                                                        <span>{r.created_at ? formatPSTDate(r.created_at) : '—'}</span>
                                                         <span>Qty: {r.return_qty}</span>
                                                         <span>by {r.returned_by || '—'}</span>
                                                         <span className={`px-1.5 py-0.5 rounded uppercase ${

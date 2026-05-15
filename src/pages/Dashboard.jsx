@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { formatPSTDate, formatPSTDateTime, formatPSTFullDate } from "../utils/dateTimeUtils";
 import {
   Area,
   AreaChart,
@@ -1004,8 +1005,8 @@ const Dashboard = () => {
         const stColor = (s.status || "").toLowerCase() === "completed" ? "#10b981" : (s.status || "").toLowerCase() === "in transit" ? "#3b82f6" : "#f59e0b";
         return `<tr>
           ${td(i + 1, "center")}
-          ${td(new Date(s.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }))}
-          ${td(new Date(s.created_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" }))}
+          ${td(formatPSTDate(s.created_at))}
+          ${td(new Date(s.created_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Manila" }))}
           <td style="text-align:center">${badge(s.status || "Pending", stColor)}</td>
           ${td(formatCurrency(s.total_amount), "right", "font-weight:800")}
         </tr>`;
@@ -1072,7 +1073,7 @@ const Dashboard = () => {
         const stColor = ["completed","received"].includes((p.status || "").toLowerCase()) ? "#10b981" : ["approved","in progress","processing"].includes((p.status || "").toLowerCase()) ? "#3b82f6" : "#f59e0b";
         return `<tr>
           ${td(i + 1, "center")}
-          ${td(new Date(p.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }))}
+          ${td(formatPSTDate(p.created_at))}
           ${td(esc(p.supplier_name) || "—")}
           <td style="text-align:center">${badge(p.status || "Pending", stColor)}</td>
           ${td(formatCurrency(p.total_amount), "right", "font-weight:800")}
@@ -1107,8 +1108,8 @@ const Dashboard = () => {
           ${td(esc(inv?.name) || s.product_id || "—")}
           ${td(esc(inv?.sku) || "—", "left", "font-family:monospace;font-size:9.5px;color:#64748b")}
           <td style="text-align:center">${badge(s.status || "Pending", stColor)}</td>
-          ${td(s.date_ordered ? new Date(s.date_ordered).toLocaleDateString("en-PH") : "—")}
-          ${td(eta ? eta.toLocaleDateString("en-PH") : "—")}
+          ${td(s.date_ordered ? formatPSTDate(s.date_ordered) : "—")}
+          ${td(eta ? formatPSTDate(eta) : "—")}
           <td style="text-align:center;font-weight:700;color:${etaColor}">${etaLabel}</td>
           ${td(safeNumber(s.quantity), "right", "font-weight:800")}
         </tr>`;
@@ -1472,7 +1473,7 @@ const Dashboard = () => {
           onClick={() => openDrill(
             'Total Sales',
             ['Date', 'Status', 'Amount'],
-            filteredSales.map(s => [new Date(s.created_at).toLocaleDateString(), s.status || '—', formatCurrency(s.total_amount)])
+            filteredSales.map(s => [formatPSTDate(s.created_at), s.status || '—', formatCurrency(s.total_amount)])
           )}
         />
         <StatCard
@@ -1483,7 +1484,7 @@ const Dashboard = () => {
           onClick={() => openDrill(
             'Total Purchases',
             ['Date', 'Supplier', 'Status', 'Amount'],
-            filteredPO.map(p => [new Date(p.created_at).toLocaleDateString(), p.supplier_name || '—', p.status || '—', formatCurrency(p.total_amount)])
+            filteredPO.map(p => [formatPSTDate(p.created_at), p.supplier_name || '—', p.status || '—', formatCurrency(p.total_amount)])
           )}
         />
         <StatCard
@@ -1768,13 +1769,13 @@ const Dashboard = () => {
             const rows = [
               ...filteredSales
                 .filter(s => (s.status || '').toLowerCase() !== 'completed')
-                .map(s => ['Sales', s.status || '—', new Date(s.created_at).toLocaleDateString(), formatCurrency(s.total_amount)]),
+                .map(s => ['Sales', s.status || '—', formatPSTDate(s.created_at), formatCurrency(s.total_amount)]),
               ...filteredScheduling
                 .filter(s => ['pending','in transit'].includes((s.status || '').toLowerCase()))
-                .map(s => { const inv = inventory.find(i => i.id === s.product_id); return ['Stockin', s.status || '—', s.eta ? new Date(s.eta).toLocaleDateString() : '—', inv?.name || s.product_id || '—']; }),
+                .map(s => { const inv = inventory.find(i => i.id === s.product_id); return ['Stockin', s.status || '—', s.eta ? formatPSTDate(s.eta) : '—', inv?.name || s.product_id || '—']; }),
               ...filteredPO
                 .filter(p => { const st = (p.status || '').toLowerCase(); return st !== 'completed' && st !== 'received'; })
-                .map(p => ['Procurement', p.status || '—', new Date(p.created_at).toLocaleDateString(), p.supplier_name || '—']),
+                .map(p => ['Procurement', p.status || '—', formatPSTDate(p.created_at), p.supplier_name || '—']),
             ];
             openDrill(
               'Order Status Overview — All Open Orders',
@@ -2330,7 +2331,7 @@ const Dashboard = () => {
               const today = new Date(); today.setHours(0,0,0,0);
               const daysLeft = eta ? Math.floor((new Date(eta).setHours(0,0,0,0) - today) / 86400000) : null;
               const daysLabel = daysLeft === null ? '—' : daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? 'Today' : `in ${daysLeft}d`;
-              return [inv?.name || s.product_id || '—', inv?.sku || '—', s.status || '—', s.eta ? new Date(s.eta).toLocaleDateString() : '—', daysLabel, safeNumber(s.quantity)];
+              return [inv?.name || s.product_id || '—', inv?.sku || '—', s.status || '—', s.eta ? formatPSTDate(s.eta) : '—', daysLabel, safeNumber(s.quantity)];
             }).sort((a, b) => {
               const aD = a[4].includes('overdue') ? -9999 : parseInt(a[4]) || 0;
               const bD = b[4].includes('overdue') ? -9999 : parseInt(b[4]) || 0;

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
-import { ShieldCheck, Search, KeyRound, Copy, Check, X } from "lucide-react";
+import { ShieldCheck, Search, KeyRound, Copy, Check, X, Mail } from "lucide-react";
 
 function generatePassword(length = 10) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -27,7 +27,7 @@ const UserManagement = () => {
   const fetchUsers = useCallback(async () => {
     const { data, error } = await supabase
       .from("users")
-      .select("id, employee_id, first_name, middle_name, last_name, username, role, must_change_password")
+      .select("id, employee_id, first_name, middle_name, last_name, username, role, must_change_password, email")
       .order("employee_id", { ascending: true });
 
     if (!error) setUsers(data || []);
@@ -64,8 +64,52 @@ const UserManagement = () => {
     setResetModal({
       tempPassword,
       name: `${user.first_name} ${user.last_name}`,
+      email: user.email,
     });
     setCopied(false);
+  };
+
+  const handleSendEmailWithPassword = (user) => {
+    const tempPassword = generatePassword();
+    const subject = encodeURIComponent("Your Temporary Password");
+    const body = encodeURIComponent(
+      `Hi ${user.first_name},\n\nYour temporary password is: ${tempPassword}\n\nPlease log in and change your password immediately.\n\nBest regards,\nAdmin`
+    );
+    if (user.email) {
+      // Open Gmail in a new tab with pre-filled subject and body
+      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(user.email)}&su=${subject}&body=${body}`, '_blank');
+      // Also update the user's password in DB
+      hashPassword(tempPassword).then((hashed) => {
+        supabase
+          .from("users")
+          .update({ password: hashed, must_change_password: true })
+          .eq("id", user.id)
+          .then(() => {
+            setUsers((prev) =>
+              prev.map((u) => u.id === user.id ? { ...u, must_change_password: true } : u)
+            );
+          });
+      });
+    } else {
+      alert("Email not configured for this user.");
+    }
+  };
+
+  const handleToggleStatus = async (user) => {
+    const newStatus = !user.must_change_password;
+    const { error } = await supabase
+      .from("users")
+      .update({ must_change_password: newStatus })
+      .eq("id", user.id);
+
+    if (error) {
+      alert("Update failed: " + error.message);
+      return;
+    }
+
+    setUsers((prev) =>
+      prev.map((u) => u.id === user.id ? { ...u, must_change_password: newStatus } : u)
+    );
   };
 
   const handleCopy = () => {
@@ -117,6 +161,7 @@ const UserManagement = () => {
                 <tr className='bg-black text-white text-[10px] font-black uppercase'>
                   <th className='px-6 py-4'>Employee</th>
                   <th className='px-6 py-4'>Username</th>
+                  <th className='px-6 py-4'>Email</th>
                   <th className='px-6 py-4'>Role</th>
                   <th className='px-6 py-4'>Status</th>
                   <th className='px-6 py-4 text-right'>Actions</th>
@@ -136,36 +181,57 @@ const UserManagement = () => {
                         <span className='text-sm text-slate-600 font-mono'>{user.username}</span>
                       </td>
                       <td className='px-6 py-4'>
+                        <span className='text-sm text-slate-600 font-mono'>{user.email || "—"}</span>
+                      </td>
+                      <td className='px-6 py-4'>
                         <span className='px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase'>
                           {user.role}
                         </span>
                       </td>
                       <td className='px-6 py-4'>
-                        {user.must_change_password ? (
-                          <span className='text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg'>
-                            Temp Password
-                          </span>
-                        ) : (
-                          <span className='text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg'>
-                            Active
-                          </span>
-                        )}
+                        <select
+                          value={user.must_change_password ? "inactive" : "active"}
+                          onChange={() => handleToggleStatus(user)}
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer transition border outline-none ${
+                            user.must_change_password
+                              ? "text-slate-600 bg-slate-100 border-slate-200"
+                              : "text-emerald-600 bg-emerald-50 border-emerald-200"
+                          }`}
+                        >
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
                       </td>
                       <td className='px-6 py-4 text-right'>
-                        <button
-                          onClick={() => handleResetPassword(user)}
-                          className='flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-200 hover:border-teal-300 px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 transition ml-auto'
-                          title='Reset Password'
-                        >
-                          <KeyRound size={13} />
-                          Reset Password
-                        </button>
+                        <div className='flex items-center justify-end gap-2'>
+                          <button
+                            onClick={() => handleSendEmailWithPassword(user)}
+                            disabled={!user.email}
+                            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition ${
+                              user.email
+                                ? "text-blue-600 border border-blue-200 hover:bg-blue-50 hover:border-blue-300"
+                                : "text-gray-400 border border-gray-200 opacity-50 cursor-not-allowed"
+                            }`}
+                            title={user.email ? "Send email with temp password" : "Email not configured"}
+                          >
+                            <Mail size={13} />
+                            Email
+                          </button>
+                          <button
+                            onClick={() => handleResetPassword(user)}
+                            className='flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-200 hover:border-teal-300 px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 transition'
+                            title='Reset Password'
+                          >
+                            <KeyRound size={13} />
+                            Reset
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan='5' className='p-12 text-center text-gray-400'>
+                    <td colSpan='6' className='p-12 text-center text-gray-400'>
                       No users found matching your search.
                     </td>
                   </tr>

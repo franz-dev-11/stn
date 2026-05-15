@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
+import { formatPSTDate, formatPSTTime } from "../utils/dateTimeUtils";
 import {
   RotateCcw,
   Search,
@@ -305,10 +306,10 @@ const ReturnRecords = () => {
                     <tr key={r.id} className="hover:bg-rose-50/40 transition-colors">
                       <td className="px-5 py-4 whitespace-nowrap">
                         <p className="text-[10px] font-bold text-slate-700">
-                          {new Date(r.returned_at).toLocaleDateString()}
+                          {formatPSTDate(r.returned_at)}
                         </p>
                         <p className="text-[9px] font-bold text-slate-400">
-                          {new Date(r.returned_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {formatPSTTime(r.returned_at)}
                         </p>
                       </td>
                       <td className="px-5 py-4 font-mono font-black text-xs text-teal-700 whitespace-nowrap">

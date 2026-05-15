@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
+import { formatPSTFullDate } from "../../utils/dateTimeUtils";
 import { usePurchasing } from "./usePurchasingData";
 import { ItemRegistry, SupplierRegistry } from "./RegistryForms";
 import CartDrawer from "./CartDrawer";
@@ -56,7 +57,7 @@ const Purchasing = () => {
   const handleQuotationRequest = () => {
     const vendor = data.suppliers.find((s) => s.name === quotationSupplier);
     const email = vendor?.email || "";
-    const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const today = formatPSTFullDate(new Date());
     const subject = encodeURIComponent(`Request for Price Quotation — ${quotationSupplier} (${today})`);
     const body = encodeURIComponent(
       `Dear ${quotationSupplier} Sales Team,\n\n` +
@@ -87,7 +88,7 @@ const Purchasing = () => {
   const handleAvailedItemsQuotation = () => {
     const vendor = data.suppliers.find((s) => s.name === quotationSupplier);
     const email = vendor?.email || "";
-    const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const today = formatPSTFullDate(new Date());
     const supplierItems = (data.allItems || data.items).filter((i) => i.supplier === quotationSupplier);
 
     // 1. Generate and download CSV for supplier to fill out

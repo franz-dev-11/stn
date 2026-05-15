@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { printElement } from "../utils/printUtils";
+import { formatPSTDate, formatPSTDateTime } from "../utils/dateTimeUtils";
 import {
   Printer,
   ChevronDown,
@@ -208,7 +209,7 @@ const InvoiceHistory = () => {
                           className='hover:bg-slate-50 cursor-pointer transition-colors'
                         >
                           <td className='px-6 py-4 text-[10px] font-bold text-slate-500 whitespace-nowrap'>
-                            {new Date(inv.created_at).toLocaleDateString()}
+                            {formatPSTDate(inv.created_at)}
                           </td>
                           <td className='px-6 py-4'>
                             <span className='font-mono font-black text-teal-700 text-sm'>
@@ -287,7 +288,7 @@ const InvoiceHistory = () => {
                                       </p>
                                       <p className='text-sm font-black uppercase mt-1'>
                                         Date:{" "}
-                                        {new Date(inv.created_at).toLocaleDateString()}
+                                        {formatPSTDate(inv.created_at)}
                                       </p>
                                       <p className='text-[10px] font-bold text-slate-600 uppercase'>
                                         Billing Statement
@@ -438,7 +439,7 @@ const InvoiceHistory = () => {
                                                 {payments.map((p, idx) => (
                                                   <tr key={p.id}>
                                                     <td className='px-3 py-2 font-black text-slate-400'>{idx + 1}</td>
-                                                    <td className='px-3 py-2 font-bold text-slate-600'>{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : '—'}</td>
+                                                    <td className='px-3 py-2 font-bold text-slate-600'>{p.paid_at ? formatPSTDate(p.paid_at) : '—'}</td>
                                                     <td className='px-3 py-2 font-bold text-slate-600'>{p.note || '—'}</td>
                                                     <td className='px-3 py-2 text-right font-black text-teal-700'>₱{Number(p.amount).toLocaleString()}</td>
                                                   </tr>

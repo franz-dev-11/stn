@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../supabaseClient";
+import { formatPSTFullDate } from "../utils/dateTimeUtils";
 import { RefreshCcw, Edit3, Save, X, Truck, Tag, Filter, Search, Download, Upload, Mail } from "lucide-react";
 import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 
@@ -153,7 +154,7 @@ const InboundPricing = () => {
     }
 
     // Generate email
-    const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const today = formatPSTFullDate(new Date());
     const itemList = supplierItems
       .map(
         (item, idx) =>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { formatPSTDate } from "../utils/dateTimeUtils";
 import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowLeft,
@@ -185,13 +186,7 @@ const ItemAction = ({ po_number, setCurrentPage }) => {
                 <Calendar size={14} className='text-slate-500' />
                 <span className='text-[11px] font-bold text-slate-600 uppercase tracking-tighter'>
                   Received:{" "}
-                  {batchDate
-                    ? new Date(batchDate).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })
-                    : "--"}
+                  {batchDate ? formatPSTDate(batchDate) : "--"}
                 </span>
               </div>
             </div>

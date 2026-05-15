@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
 import { printElement } from "../../utils/printUtils";
+import { formatPSTDate } from "../../utils/dateTimeUtils";
 import {
   Search,
   ShoppingCart,
@@ -263,7 +264,7 @@ const RecordSales = () => {
         transactionType,
         totalAmount,
         items: [...cart],
-        date: new Date().toLocaleDateString(),
+        date: formatPSTDate(new Date()),
       });
       setCart([]);
       sessionStorage.removeItem("pos_cart");

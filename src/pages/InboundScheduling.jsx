@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
+import { formatPSTDateTime } from "../utils/dateTimeUtils";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -584,8 +585,8 @@ const InboundScheduling = () => {
                     <td className='p-6'>
                       <div className='text-sm font-black text-slate-700 uppercase'>
                         {poCreatedAtMap[group.order_number]
-                          ? new Date(poCreatedAtMap[group.order_number]).toLocaleString()
-                          : (group.items[0]?.date_processed ? new Date(group.items[0].date_processed).toLocaleString() : '—')}
+                          ? formatPSTDateTime(poCreatedAtMap[group.order_number])
+                          : (group.items[0]?.date_processed ? formatPSTDateTime(group.items[0].date_processed) : '—')}
                       </div>
                     </td>
                     <td className='p-6 text-right'>

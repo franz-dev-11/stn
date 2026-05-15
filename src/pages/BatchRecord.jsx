@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { formatPSTDate } from "../utils/dateTimeUtils";
 import { Package, Calendar, Layers } from "lucide-react";
 
 const BatchRecord = () => {
@@ -87,14 +88,7 @@ const BatchRecord = () => {
   const supplier = items[0]?.supplier || "—";
   const status = items[0]?.status || "—";
 
-  const formatDate = (d) =>
-    d
-      ? new Date(d).toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })
-      : "—";
+  const formatDate = (d) => d ? formatPSTDate(d) : "—";
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">

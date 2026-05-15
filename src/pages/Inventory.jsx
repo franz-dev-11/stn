@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { formatPSTDate, formatPSTTime } from "../utils/dateTimeUtils";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Package,
@@ -601,14 +602,7 @@ const Inventory = () => {
                             {batch.batch_number?.split("-").slice(0, 2).join("-")}
                           </td>
                           <td className='px-8 py-6 text-center font-bold text-slate-700 text-sm'>
-                            {new Date(batch.batch_date).toLocaleDateString(
-                              undefined,
-                              {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                              },
-                            )}
+                            {formatPSTDate(batch.batch_date)}
                           </td>
                           <td className='px-8 py-6 text-emerald-800 text-center font-black text-lg'>
                             {batch.current_stock}{" "}
@@ -694,10 +688,7 @@ const Inventory = () => {
                     className='text-xs hover:bg-slate-50 transition-colors'
                   >
                     <td className='px-8 py-5 font-mono font-bold text-slate-500'>
-                      {new Date(record.snapshot_date).toLocaleDateString(
-                        undefined,
-                        { year: "numeric", month: "short", day: "numeric" },
-                      )}
+                      {formatPSTDate(record.snapshot_date)}
                     </td>
                     <td className='px-8 py-5 font-black text-slate-900 uppercase text-sm'>
                       {record.name}
@@ -787,9 +778,7 @@ const Inventory = () => {
                     <td className='border border-slate-300 p-3 align-middle'>
                       <p className='text-sm font-bold text-slate-700'>
                         Received:{' '}
-                        {item.batchDate
-                          ? new Date(item.batchDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                          : '—'}
+                        {item.batchDate ? formatPSTDate(item.batchDate) : '—'}
                       </p>
                     </td>
                   </tr>

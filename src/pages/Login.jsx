@@ -79,7 +79,7 @@ export default function Login({ setCurrentUser }) {
       <div className="w-full md:w-[42%] bg-[#1b6b5c] flex flex-col justify-center px-10 py-14 relative overflow-hidden">
 
         {/* Brand */}
-        <div className="mb-10 flex flex-col items-start">
+        <div className="mb-10 flex flex-col items-center justify-center">
           <img src={stnLogo} alt="STN Logo" className="h-45 w-auto object-contain mb-3 brightness-0 invert opacity-90" />
         </div>
 

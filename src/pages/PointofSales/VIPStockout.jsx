@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
 import { printElement } from "../../utils/printUtils";
+import { formatPSTDate } from "../../utils/dateTimeUtils";
 import {
   Search,
   ShoppingCart,
@@ -251,7 +252,7 @@ const VIPStockout = () => {
         paymentTerms: { ...paymentTerms },
         balance,
         installmentAmt,
-        date: new Date().toLocaleDateString(),
+        date: formatPSTDate(new Date()),
       });
       setCart([]);
       setPaymentTerms({ downpayment: 0, installments: 1 });

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 import { Star, ChevronDown, ChevronUp, Search, X, PlusCircle } from "lucide-react";
+import { formatPSTDate } from "../../utils/dateTimeUtils";
 
 const VIPTransactions = () => {
   const location = useLocation();
@@ -226,7 +227,7 @@ const VIPTransactions = () => {
                       <td className="py-3 px-4 font-mono font-black text-teal-700 text-xs">{order.so_number || '—'}</td>
                       <td className="py-3 px-4 font-black uppercase">{order.customer_name}</td>
                       <td className="py-3 px-4 text-slate-500 font-bold">
-                        {new Date(order.created_at).toLocaleDateString()}
+                        {formatPSTDate(order.created_at)}
                       </td>
                       <td className="py-3 px-4 text-right font-black">₱{Number(order.grand_total).toLocaleString()}</td>
                       <td className="py-3 px-4 text-right font-bold text-slate-600">₱{Number(order.downpayment).toLocaleString()}</td>
@@ -337,7 +338,7 @@ const VIPTransactions = () => {
                                     <tbody>
                                       {orderPayments.map((p) => (
                                         <tr key={p.id} className="border-b border-slate-100">
-                                          <td className="py-2 px-3 font-bold text-slate-500">{new Date(p.paid_at).toLocaleDateString()}</td>
+                                          <td className="py-2 px-3 font-bold text-slate-500">{formatPSTDate(p.paid_at)}</td>
                                           <td className="py-2 px-3 font-bold">{p.note || "—"}</td>
                                           <td className="py-2 px-3 text-right font-black text-emerald-600">₱{Number(p.amount).toLocaleString()}</td>
                                         </tr>

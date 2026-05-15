@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
+import { formatPSTDateTime } from "../utils/dateTimeUtils";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -551,7 +552,7 @@ const OutboundScheduling = () => {
                       <td className='p-6'>
                         <span className='text-xs font-black uppercase text-slate-700'>
                           {(tx.status === 'Completed' || tx.status === 'Delivered')
-                            ? (tx.date_processed ? new Date(tx.date_processed).toLocaleString() : '—')
+                            ? (tx.date_processed ? formatPSTDateTime(tx.date_processed) : '—')
                             : '—'}
                         </span>
                       </td>

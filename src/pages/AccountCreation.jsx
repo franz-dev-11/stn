@@ -19,6 +19,7 @@ const EMPTY_ACCOUNT = {
   middle_name: "",
   last_name: "",
   birthday: "",
+  email: "",
   username: "",
   password: "",
   role: "Cashier",
@@ -223,6 +224,17 @@ function SingleForm() {
           />
         </div>
         <div>
+          <label className={labelCls}>Email</label>
+          <input
+            type='email'
+            name='email'
+            value={form.email}
+            onChange={handleChange}
+            placeholder='user@company.com'
+            className={inputCls}
+          />
+        </div>
+        <div>
           <label className={labelCls}>Role</label>
           <select name='role' value={form.role} onChange={handleChange} className={inputCls}>
             {getAvailableRoles().map((r) => (
@@ -299,20 +311,21 @@ const BATCH_COLS = [
   { key: "middle_name", label: "Middle Name", type: "text", placeholder: "Middle" },
   { key: "last_name", label: "Last Name *", type: "text", placeholder: "Last" },
   { key: "birthday", label: "Birthday *", type: "date", placeholder: "" },
+  { key: "email", label: "Email", type: "email", placeholder: "user@company.com" },
   { key: "role", label: "Role", type: "select", placeholder: "" },
   { key: "username", label: "Username (auto)", type: "text", placeholder: "auto" },
   { key: "password", label: "Password (auto)", type: "password-regen", placeholder: "" },
 ];
 
-const CSV_HEADERS = ["employee_id", "first_name", "middle_name", "last_name", "birthday", "role", "username", "password"];
+const CSV_HEADERS = ["employee_id", "first_name", "middle_name", "last_name", "birthday", "email", "role", "username", "password"];
 const CSV_REQUIRED = ["first_name", "last_name", "birthday"];
-const TEMPLATE_HEADERS = ["first_name", "middle_name", "last_name", "birthday"];
+const TEMPLATE_HEADERS = ["first_name", "middle_name", "last_name", "birthday", "email"];
 
 function downloadTemplate() {
   // Create worksheet data
   const wsData = [
-    ["first_name", "middle_name", "last_name", "birthday"],
-    ["Juan", "Lopez", "Dela Cruz", "1990-05-21"]
+    ["first_name", "middle_name", "last_name", "birthday", "email"],
+    ["Juan", "Lopez", "Dela Cruz", "1990-05-21", "juan.delacruz@company.com"]
   ];
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   const wb = XLSX.utils.book_new();
@@ -614,6 +627,7 @@ function BatchForm() {
             middle_name: rest.middle_name.trim(),
             last_name: rest.last_name.trim(),
             birthday: bday,
+            email: rest.email ? rest.email.trim() : null,
             username: rest.username.trim(),
             password: await hashPassword(password),
             must_change_password: true,
@@ -629,16 +643,16 @@ function BatchForm() {
         action: "BATCH_ACCOUNT",
         performed_by: getPerformedBy(sessionUser),
         quantity: payload.length,
-        item_name: payload.map((p) => `${p.first_name} ${p.last_name}`.trim()).join(", "),
+        item_name: payload.map((p) => `${p.first_name} ${p.last_name}`.trim()).join(", " ),
       }]);
 
       setRows([{ ...EMPTY_ACCOUNT, _id: Date.now(), password: generatePassword() }]);
-      // Refresh first row with next ID
       getNextEmployeeId()
         .then((nextId) =>
           setRows([{ ...EMPTY_ACCOUNT, _id: Date.now(), employee_id: nextId, password: generatePassword() }])
         )
         .catch(console.error);
+
       setResult({
         type: "success",
         message: `${payload.length} account(s) created successfully.`,
