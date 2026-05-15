@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 import { printElement } from "../utils/printUtils";
-import { formatPSTDate, formatPSTDateTime, getCurrentPSTDateTime } from "../utils/dateTimeUtils";
+import { formatPSTDate, formatPSTDateTime, getCurrentPSTDateTime, convertIsoToDateInput } from "../utils/dateTimeUtils";
 import {
   Printer,
   ChevronDown,
@@ -89,7 +89,7 @@ const PurchaseHistory = () => {
       itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       vendorName.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const orderDate = new Date(batch.date_ordered).toISOString().split("T")[0];
+    const orderDate = convertIsoToDateInput(batch.date_ordered);
     const matchesStart = !startDate || orderDate >= startDate;
     const matchesEnd = !endDate || orderDate <= endDate;
 
@@ -101,7 +101,7 @@ const PurchaseHistory = () => {
     const grouped = {};
     filteredBatches.forEach((batch) => {
       const supplier = batch.hardware_inventory?.supplier || "Unknown Supplier";
-      const key = batch.order_number || `${supplier}|${new Date(batch.date_ordered).toISOString().split("T")[0]}`;
+      const key = batch.order_number || `${supplier}|${convertIsoToDateInput(batch.date_ordered)}`;
 
       if (!grouped[key]) {
         grouped[key] = {

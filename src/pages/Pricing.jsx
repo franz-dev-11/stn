@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../supabaseClient";
-import { formatPSTFullDate } from "../utils/dateTimeUtils";
+import { formatPSTFullDate, getCurrentPSTDateTime } from "../utils/dateTimeUtils";
 import { RefreshCcw, Edit3, Save, X, Truck, Tag, Filter, Search, Download, Upload, Mail } from "lucide-react";
 import { insertAuditTrail, getSessionUser, getPerformedBy } from "../utils/auditTrail";
 
@@ -69,7 +69,7 @@ const InboundPricing = () => {
           manual_retail_price: parseFloat(editData.manual_retail_price).toFixed(2),
           margin_percent: parseFloat(editData.margin_percent).toFixed(2),
           suggested_srp: parseFloat(editData.suggested_srp).toFixed(2),
-          updated_at: new Date(),
+          updated_at: getCurrentPSTDateTime(),
         })
         .eq("id", id);
 
@@ -247,7 +247,7 @@ const InboundPricing = () => {
       const user = getSessionUser();
       const auditRows = [];
       for (const u of updates) {
-        const payload = { updated_at: new Date() };
+        const payload = { updated_at: getCurrentPSTDateTime() };
         if (u.supplier_cost !== null) payload.supplier_cost = u.supplier_cost.toFixed(2);
         if (u.margin_percent !== null) payload.margin_percent = u.margin_percent.toFixed(2);
         if (u.suggested_srp !== null) payload.suggested_srp = u.suggested_srp.toFixed(2);

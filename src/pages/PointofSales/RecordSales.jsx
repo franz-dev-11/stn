@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../../utils/auditTrail";
 import { printElement } from "../../utils/printUtils";
-import { formatPSTDate, getCurrentPSTDateTime, getTodayPSTDateString } from "../../utils/dateTimeUtils";
+import { formatPSTDate, getCurrentPSTDateTime, getTodayPSTDateString, convertToPhilippineDate } from "../../utils/dateTimeUtils";
 import {
   Search,
   ShoppingCart,
@@ -187,7 +187,7 @@ const RecordSales = () => {
             total_amount: totalAmount,
             status: transactionType === "walk-in" ? "Completed" : "Pending",
             ...(transactionType === "walk-in" && {
-              date_processed: getCurrentPSTDateTime(),
+              date_processed: _todayStr,
               delivery_date: _todayStr,
             }),
           },

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
-import { formatPSTDate, formatPSTTime } from "../utils/dateTimeUtils";
+import { formatPSTDate, formatPSTTime, getTodayPSTDateString } from "../utils/dateTimeUtils";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Package,
@@ -260,8 +260,7 @@ const Inventory = () => {
       return;
     try {
       setIsProcessing(true);
-      const _d = new Date();
-      const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
+      const today = getTodayPSTDateString();
       const products = Object.values(groupedByName).map(
         (group) => group[0].hardware_inventory,
       );

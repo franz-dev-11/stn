@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { printElement } from "../utils/printUtils";
-import { formatPSTDate, formatPSTDateTime } from "../utils/dateTimeUtils";
+import { formatPSTDate, formatPSTDateTime, convertIsoToDateInput } from "../utils/dateTimeUtils";
 import {
   Printer,
   ChevronDown,
@@ -62,7 +62,7 @@ const InvoiceHistory = () => {
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
 
-    const invDate = new Date(inv.created_at).toISOString().split("T")[0];
+    const invDate = convertIsoToDateInput(inv.created_at);
     const matchesStart = !startDate || invDate >= startDate;
     const matchesEnd = !endDate || invDate <= endDate;
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
+import { getTodayPSTDateString } from "../utils/dateTimeUtils";
 import {
   Search,
   ShoppingCart,
@@ -171,8 +172,7 @@ const AuditTrail = () => {
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const _d = new Date();
-    const dateStr = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
+    const dateStr = getTodayPSTDateString();
     a.href = url;
     a.download = `audit_trail_${dateStr}.csv`;
     a.click();

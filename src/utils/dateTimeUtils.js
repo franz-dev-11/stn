@@ -101,40 +101,23 @@ export const getCurrentPSTDate = () => {
 
 /**
  * Get current datetime in Philippine Standard Time as ISO string
+ * Calculates the actual UTC time that represents the current PST moment
  * @returns {string} Current datetime in ISO format representing PST
  */
 export const getCurrentPSTDateTime = () => {
   const now = new Date();
   
-  // Get the time parts in PST
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Manila',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).formatToParts(now);
+  // Get what the current time looks like in both UTC and PST timezones
+  const utcTime = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const pstTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
   
-  let year, month, day, hour, minute, second;
-  for (const part of parts) {
-    if (part.type === 'year') year = part.value;
-    if (part.type === 'month') month = part.value;
-    if (part.type === 'day') day = part.value;
-    if (part.type === 'hour') hour = part.value;
-    if (part.type === 'minute') minute = part.value;
-    if (part.type === 'second') second = part.value;
-  }
+  // Calculate the offset between PST and UTC
+  const pstOffset = pstTime.getTime() - utcTime.getTime();
   
-  // PST is UTC+8, so to get ISO string representing this PST time:
-  // Subtract 8 hours to get the UTC equivalent
-  const pstTime = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
-  const pstOffsetMs = 8 * 60 * 60 * 1000;
-  const utcEquivalent = new Date(pstTime.getTime() - pstOffsetMs);
+  // Apply this offset to the actual current time to get the UTC time that represents this PST moment
+  const utcDateTime = new Date(now.getTime() - pstOffset);
   
-  return utcEquivalent.toISOString();
+  return utcDateTime.toISOString();
 };
 
 /**

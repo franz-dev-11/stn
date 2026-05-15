@@ -552,7 +552,7 @@ const OutboundScheduling = () => {
                       <td className='p-6'>
                         <span className='text-xs font-black uppercase text-slate-700'>
                           {(tx.status === 'Completed' || tx.status === 'Delivered')
-                            ? (tx.date_processed ? formatPSTDateTime(tx.date_processed) : '—')
+                            ? (tx.date_processed ? formatPSTDate(tx.date_processed) : '—')
                             : '—'}
                         </span>
                       </td>
