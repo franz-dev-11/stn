@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { getSessionUser, getPerformedBy, insertAuditTrail } from "../utils/auditTrail";
-import { formatPSTDateTime, convertToPhilippineDate } from "../utils/dateTimeUtils";
+import { formatPSTDateTime, convertToPhilippineDate, convertIsoToDateInput, formatPSTDate } from "../utils/dateTimeUtils";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -227,7 +227,7 @@ const OutboundScheduling = () => {
   const handleEdit = (tx) => {
     setEditingId(tx.id);
     setEditData({
-      delivery_date: tx.delivery_date || "",
+      delivery_date: convertIsoToDateInput(tx.delivery_date) || "",
       status: tx.status || "Pending",
       date_processed: tx.date_processed || "",
     });
@@ -518,7 +518,7 @@ const OutboundScheduling = () => {
                         ) : (
                           <div className='flex items-center gap-2 text-sm font-black text-slate-700 uppercase'>
                             <Clock size={18} strokeWidth={2.5} />{' '}
-                            {tx.delivery_date || 'NOT SCHEDULED'}
+                            {tx.delivery_date ? formatPSTDate(tx.delivery_date) : 'NOT SCHEDULED'}
                           </div>
                         )}
                       </td>
